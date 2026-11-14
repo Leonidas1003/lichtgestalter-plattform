@@ -1,0 +1,18 @@
+/* Gemeinsame dunkle Designsprache; Drucklayout bewusst ausgenommen. */
+:root{color-scheme:dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;background:#0c111c!important;color:#e7eaf0!important}
+body{background:#0c111c!important;color:#e7eaf0!important}
+header{background:#151e2d!important;border-bottom:1px solid #2a374a!important;color:#e7eaf0!important}
+header h1{color:#f2f5fb!important;letter-spacing:-.025em}header small,.muted,.hint,.lg-sub{color:#a8b4c6!important}
+#nav{background:#0c111c!important;border-color:#29374a!important}
+button,.secondary,select,input,textarea{background:#283850!important;color:#e7eaf0!important;border:1px solid #40526b!important;border-radius:9px!important}
+button:hover{filter:brightness(1.13)}button.active,button:not(.secondary)[type=submit]{background:#5b80ef!important;border-color:#5b80ef!important;color:white!important}
+input,select,textarea{background:#111a2b!important;color:#fff!important}
+.panel,.card,.stat,.lane,.project-card,.modal,.lg-panel,.notice{background:#151e2d!important;color:#e7eaf0!important;border:1px solid #2a374a!important;border-radius:14px!important}
+.panel h2,.panel h3,.card h3,.modal h2,main h2,main h3{color:#e7eaf0!important}
+main, #app{color:#e7eaf0!important}th{color:#9aaac0!important}td,th{border-bottom-color:#29374a!important}table{color:#e7eaf0!important}
+.lg-portal{max-width:1280px!important;margin:38px auto!important}.lg-portal h2{color:#e7eaf0!important}.lg-eyebrow{color:#8da7fb!important}
+.lg-tile{background:#151e2d!important;border:1px solid #2a374a!important;box-shadow:none!important;min-height:235px!important}
+.lg-tile:hover{border-color:#5b80ef!important;box-shadow:0 9px 28px #0005!important}.lg-tile strong{color:#f2f5fb!important}.lg-tile>span:nth-of-type(2){color:#a8b4c6!important}.lg-tile-next{color:#9bb3ff!important}
+.lg-finance{height:calc(100vh - 135px)!important;min-height:680px!important}.lg-finance iframe{border-radius:0!important;background:#0c111c!important}
+#lg-back{background:#283850!important}#lg-auth-root{color:#e7eaf0!important}
+@media print{ :root{color-scheme:light!important}body{background:#fff!important;color:#111!important}#printarea,#printarea *{color:#111!important}#printarea .paper{background:white!important;border:none!important}#printarea table{color:#111!important}#printarea td,#printarea th{border-color:#aaa!important}}

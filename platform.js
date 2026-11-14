@@ -2,11 +2,11 @@
 (()=>{
 'use strict';
 const legacyNav=window.nav, legacyRender=window.render;
-let financeLoaded=false;
+
 const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tiles=[['Kundendaten verwalten','Kunden, Ansprechpartner und Projekte','Kunden','👥'],['Dokumente erstellen','Angebote, Rechnungen und Auftragsabwicklung','Pipeline','📄'],['Finanzdaten','Liquiditätsplanung, Kredite und Rentabilität','Finanzdaten','📈']];
-function home(){return `<section class="lg-portal"><p class="lg-eyebrow">DIE LICHTGESTALTER · PLATTFORM</p><h2>Was möchtest du heute bearbeiten?</h2><p class="lg-sub">Wähle einen Arbeitsbereich. Alle Bereiche nutzen dieselbe Anmeldung und dieselbe Supabase-Datenbank.</p><div class="lg-tiles">${tiles.map(t=>`<button type="button" class="lg-tile" data-go="${t[2]}"><span class="lg-tile-icon">${t[3]}</span><strong>${t[0]}</strong><span>${t[1]}</span><span class="lg-tile-next">Öffnen →</span></button>`).join('')}</div></section>`}
-function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Liquiditätsplanung" src="liquiditaet.html" loading="eager"></iframe></section>`}
+function home(){return `<section class="lg-portal"><p class="lg-eyebrow">LICHTGESTALTER PLATTFORM</p><h2>Was möchtest du heute bearbeiten?</h2><p class="lg-sub">Wähle einen Arbeitsbereich. Alle Bereiche nutzen dieselbe Anmeldung und dieselbe Supabase-Datenbank.</p><div class="lg-tiles">${tiles.map(t=>`<button type="button" class="lg-tile" data-go="${t[2]}"><span class="lg-tile-icon">${t[3]}</span><strong>${t[0]}</strong><span>${t[1]}</span><span class="lg-tile-next">Öffnen →</span></button>`).join('')}</div></section>`}
+function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Finanzdaten" src="liquiditaet.html" loading="eager"></iframe></section>`}
 function bind(){document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>window.LGPlatform.open(b.dataset.go));}
 window.LGPlatform={open(dest){view=dest;render()},home(){view='Startseite';render()}};
 window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data?.type==='lg-home')window.LGPlatform.home()});

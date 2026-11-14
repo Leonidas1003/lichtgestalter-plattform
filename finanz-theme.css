@@ -1,0 +1,5 @@
+/* Finanzmodul ist Teil der Plattform: doppelte Kopfzeile entfernen */
+body>.wrap{max-width:none;padding:0 22px 28px}.wrap>header.top{display:none!important}
+#app{display:block;margin-top:0}#app.hidden{display:none!important}
+.nav{margin:0 0 14px;padding-top:14px}#content{padding-bottom:20px}
+@media(max-width:750px){body>.wrap{padding:0 12px 20px}}
