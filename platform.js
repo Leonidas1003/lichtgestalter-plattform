@@ -6,14 +6,32 @@ const legacyNav=window.nav, legacyRender=window.render;
 const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tiles=[['Kundendaten verwalten','Kunden, Ansprechpartner und Projekte','Kunden','👥'],['Dokumente erstellen','Angebote, Rechnungen und Auftragsabwicklung','Pipeline','📄'],['Finanzdaten','Liquiditätsplanung, Kredite und Rentabilität','Finanzdaten','📈']];
 function home(){return `<section class="lg-portal"><p class="lg-eyebrow">LICHTGESTALTER PLATTFORM</p><h2>Was möchtest du heute bearbeiten?</h2><p class="lg-sub">Wähle einen Arbeitsbereich. Alle Bereiche nutzen dieselbe Anmeldung und dieselbe Supabase-Datenbank.</p><div class="lg-tiles">${tiles.map(t=>`<button type="button" class="lg-tile" data-go="${t[2]}"><span class="lg-tile-icon">${t[3]}</span><strong>${t[0]}</strong><span>${t[1]}</span><span class="lg-tile-next">Öffnen →</span></button>`).join('')}</div></section>`}
-function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Finanzdaten" src="liquiditaet.html?v=20" loading="eager"></iframe></section>`}
+function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Finanzdaten" src="liquiditaet.html?v=21" loading="eager"></iframe></section>`}
 function bind(){document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>window.LGPlatform.open(b.dataset.go));}
-const routeKey='lg-platform-view-v20';
-const allowed=new Set(['Startseite','Kunden','Pipeline','Finanzdaten']);
-function restoreRoute(){try{const v=sessionStorage.getItem(routeKey);return allowed.has(v)?v:'Startseite'}catch{return 'Startseite'}}
+const routeKey='lg-platform-view-v21';
+const oldRouteKey='lg-platform-view-v20';
+const allowed=new Set(['Startseite','Kunden','Pipeline','Projekte','Finanzdaten','Angebote','Auftragsbestätigungen','Rechnungen','Lieferscheine','Gutschriften','Einstellungen']);
+function restoreRoute(){try{const v=sessionStorage.getItem(routeKey)||sessionStorage.getItem(oldRouteKey);return allowed.has(v)?v:'Startseite'}catch{return 'Startseite'}}
 function rememberRoute(dest){try{sessionStorage.setItem(routeKey,dest)}catch{}}
-window.LGPlatform={open(dest){view=dest;rememberRoute(dest);render()},home(){view='Startseite';rememberRoute(view);render()}};
-window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data?.type==='lg-home')window.LGPlatform.home()});
+window.LGPlatform={restore(){view=restoreRoute();render()},open(dest){view=dest;rememberRoute(dest);render()},home(){view='Startseite';rememberRoute(view);render()}};
+window.addEventListener('message',e=>{
+ if(e.origin!==location.origin)return;
+ if(e.data?.type==='lg-home')window.LGPlatform.home();
+ if(e.data?.type==='lg-selection'){
+  const bar=document.getElementById('lg-global-selection');
+  if(!bar)return;
+  if(!e.data.count||view!=='Finanzdaten'){bar.hidden=true;return}
+  bar.hidden=false;
+  bar.querySelector('[data-count]').textContent=e.data.count;
+  bar.querySelector('[data-expenses]').textContent=e.data.expenses;
+  bar.querySelector('[data-income]').textContent=e.data.income;
+  bar.querySelector('[data-net]').textContent=e.data.net;
+ }
+});
+const selectionBar=document.createElement('div');selectionBar.id='lg-global-selection';selectionBar.hidden=true;
+selectionBar.innerHTML='<strong><span data-count>0</span> ausgewählt</strong><span>Ausgaben: <b data-expenses></b></span><span>Einnahmen: <b data-income></b></span><span>Saldo: <b data-net></b></span><button type="button" id="lg-clear-selection">Auswahl aufheben</button>';
+document.body.appendChild(selectionBar);
+selectionBar.querySelector('button').onclick=()=>document.getElementById('lg-finance-frame')?.contentWindow?.postMessage({type:'lg-clear-selection'},location.origin);
 window.nav=function(){
  const n=document.getElementById('nav');if(!n)return;
  if(view==='Startseite'){n.innerHTML='';n.style.display='none';return}
@@ -24,14 +42,16 @@ window.nav=function(){
 };
 window.render=function(){
  if(!cloudReady)return;
+ if(view!=='Finanzdaten')selectionBar.hidden=true;
+ rememberRoute(view);
  if(view==='Startseite'||view==='Finanzdaten'){
   nav();document.getElementById('app').innerHTML=view==='Startseite'?home():finance();bind();if(view==='Finanzdaten'){const f=document.getElementById('lg-finance-frame');if(f)f.addEventListener('load',()=>f.contentWindow.postMessage({type:'lg-finance-open'},location.origin),{once:true})}
  }else {legacyRender();nav();rememberRoute(view);}
 };
-const oldLoad=window.lgLoad;
-window.lgLoad=async function(...args){await oldLoad(...args);if(cloudReady){view=restoreRoute();render()}};
+// cloud.js calls LGPlatform.restore() after authentication; avoid racing two render calls.
 // Prevent a stale local view before auth; cloud.js owns authentication.
 const css=document.createElement('style');css.textContent=`
 .lg-portal{max-width:1100px;margin:42px auto;padding:10px 20px 50px}.lg-eyebrow{font-size:12px;letter-spacing:.16em;color:#64748b;font-weight:700}.lg-portal h2{font-size:30px;margin:12px 0}.lg-sub{color:#64748b;margin-bottom:30px}.lg-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.lg-tile{border:1px solid #d9e1e9;background:#fff;border-radius:16px;min-height:245px;text-align:left;padding:25px;display:flex;flex-direction:column;align-items:flex-start;gap:14px;box-shadow:0 4px 18px #0000000b;cursor:pointer}.lg-tile:hover{border-color:#52799e;box-shadow:0 9px 24px #00000016}.lg-tile-icon{font-size:35px}.lg-tile strong{font-size:19px;color:#172a40}.lg-tile>span:nth-of-type(2){color:#607083;line-height:1.45}.lg-tile-next{margin-top:auto;font-weight:700;color:#24547c}.lg-finance{height:calc(100vh - 165px);min-height:650px}.lg-finance iframe{width:100%;height:100%;border:0;border-radius:10px;background:#0c111c}#nav{flex-wrap:wrap;align-items:center}#lg-back{margin-right:12px!important}@media(max-width:760px){.lg-tiles{grid-template-columns:1fr}.lg-tile{min-height:175px}.lg-finance{height:calc(100vh - 135px)}}`;
+css.textContent+=`#lg-global-selection{position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#23314a;color:#fff;border-top:1px solid #61749a;box-shadow:0 -8px 28px #0008;padding:14px 22px;display:flex;gap:24px;align-items:center;flex-wrap:wrap}#lg-global-selection[hidden]{display:none!important}#lg-global-selection button{margin-left:auto;background:#587fe9;color:white}`;
 document.head.appendChild(css);
 })();

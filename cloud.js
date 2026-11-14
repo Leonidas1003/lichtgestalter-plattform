@@ -20,7 +20,7 @@ async function lgLoad(){
  lgBaseline=lgIndex(data||[]);state=lgStateFrom(data||[]);cloudReady=true;lgBlocked=false;
  document.getElementById('cloud-auth-gate')?.remove();authRoot.style.display='none';
  if(!document.getElementById('lg-logout')){const b=document.createElement('button');b.id='lg-logout';b.className='secondary';b.textContent='Abmelden';b.onclick=async()=>{await lgFlush();if(lgBlocked)return;cloudReady=false;await cloudClient.auth.signOut();location.reload();};document.querySelector('header .actions')?.appendChild(b);}
- render();
+ if(window.LGPlatform?.restore)window.LGPlatform.restore();else render();
 }
 function lgCurrent(){return {customers:Object.fromEntries(state.customers.map(x=>[x.id,x])),projects:Object.fromEntries(state.projects.map(x=>[x.id,x])),docs:Object.fromEntries(state.docs.map(x=>[x.id,x])),settings:{main:state.settings}};}
 function lgChanges(){const now=lgCurrent(),out=[];for(const kind of ['customers','projects','docs','settings']){const old=lgBaseline[kind],fresh=now[kind];for(const id of new Set([...Object.keys(old),...Object.keys(fresh)])){const a=old[id],b=fresh[id];if(a&&!b)out.push({kind,id,op:'delete',version:a.version});else if(!a&&b)out.push({kind,id,op:'insert',version:0,data:b});else if(a&&b&&JSON.stringify(a.data)!==JSON.stringify(b))out.push({kind,id,op:'update',version:a.version,data:b});}}return out;}
