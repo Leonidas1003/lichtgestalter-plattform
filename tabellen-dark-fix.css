@@ -1,0 +1,53 @@
+/* Lichtgestalter Plattform V22 – ausschließlich Tabellenfarben.
+   Betrifft Kunden, Projekte, Dokumente und Modaldialoge.
+   Keine Änderungen an Daten, Logik oder Druck/PDF. */
+@media screen {
+  body #app table thead,
+  body #app table thead tr,
+  body #app table thead th,
+  body #overlay table thead,
+  body #overlay table thead tr,
+  body #overlay table thead th,
+  body .modal table thead,
+  body .modal table thead tr,
+  body .modal table thead th {
+    background-color: #27384f !important;
+    color: #e9f0fa !important;
+    border-color: #40546c !important;
+  }
+  body #app table tbody tr,
+  body #app table tbody td,
+  body #overlay table tbody tr,
+  body #overlay table tbody td,
+  body .modal table tbody tr,
+  body .modal table tbody td {
+    background-color: #172233 !important;
+    color: #e6edf7 !important;
+    border-color: #314258 !important;
+  }
+  body #app table tbody tr:hover td,
+  body #overlay table tbody tr:hover td,
+  body .modal table tbody tr:hover td {
+    background-color: #263954 !important;
+    color: #fff !important;
+  }
+  body #app table tbody tr:focus-within td,
+  body #overlay table tbody tr:focus-within td,
+  body .modal table tbody tr:focus-within td {
+    background-color: #2b4160 !important;
+    color: #fff !important;
+  }
+  body #app table th *,
+  body #overlay table th *,
+  body .modal table th * {
+    color: inherit !important;
+  }
+  body #app table td b,
+  body #app table td strong,
+  body #overlay table td b,
+  body #overlay table td strong,
+  body .modal table td b,
+  body .modal table td strong {
+    color: #f5f8ff !important;
+  }
+}
