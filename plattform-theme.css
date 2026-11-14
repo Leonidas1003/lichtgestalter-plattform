@@ -16,3 +16,11 @@ main, #app{color:#e7eaf0!important}th{color:#9aaac0!important}td,th{border-botto
 .lg-finance{height:calc(100vh - 135px)!important;min-height:680px!important}.lg-finance iframe{border-radius:0!important;background:#0c111c!important}
 #lg-back{background:#283850!important}#lg-auth-root{color:#e7eaf0!important}
 @media print{ :root{color-scheme:light!important}body{background:#fff!important;color:#111!important}#printarea,#printarea *{color:#111!important}#printarea .paper{background:white!important;border:none!important}#printarea table{color:#111!important}#printarea td,#printarea th{border-color:#aaa!important}}
+
+/* V18: Auswahl- und Hover-Kontrast in der Kundenverwaltung */
+#app table tbody tr:hover td,#app table tbody tr:hover th{background:#202e43!important;color:#f2f5fb!important}
+#app table tbody tr:focus-within td,#app table tbody tr:focus-within th{background:#263852!important;color:#fff!important}
+#app table tbody tr.selected td,#app table tbody tr.active td,#app table tbody tr[aria-selected="true"] td{background:#293c58!important;color:#fff!important}
+#app table tbody tr:hover a,#app table tbody tr:focus-within a{color:#a9c4ff!important}
+#app table tbody tr:hover .muted,#app table tbody tr:focus-within .muted{color:#b9c9dc!important}
+#app table tbody tr:hover .pill,#app table tbody tr:focus-within .pill{color:inherit}

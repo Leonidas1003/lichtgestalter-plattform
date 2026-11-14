@@ -21,7 +21,7 @@ window.nav=function(){
 window.render=function(){
  if(!cloudReady)return;
  if(view==='Startseite'||view==='Finanzdaten'){
-  nav();document.getElementById('app').innerHTML=view==='Startseite'?home():finance();bind();
+  nav();document.getElementById('app').innerHTML=view==='Startseite'?home():finance();bind();if(view==='Finanzdaten'){const f=document.getElementById('lg-finance-frame');if(f)f.addEventListener('load',()=>f.contentWindow.postMessage({type:'lg-finance-open'},location.origin),{once:true})}
  }else legacyRender(),nav();
 };
 const oldLoad=window.lgLoad;
