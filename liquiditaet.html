@@ -70,9 +70,9 @@ async function materialize(){
   // Server-seitig atomar mit Advisory Lock: zwei Admins erzeugen keine doppelten Raten.
   const through=endMonth();
   const {data,error}=await db.rpc('lg_generate_finance_entries',{p_through:through});
-  if(error)throw Error('Automatik nicht verfügbar. Bitte zuerst 01_automatik.sql ausführen. '+error.message);
+  if(error)throw Error('Automatik nicht verfügbar. Bitte 04_finanzautomatik_v23.sql in Supabase ausführen. '+error.message);
   if(Number(data)>0){
-    const {data:rows,error:readError}=await db.from('entries').select('*').limit(10000);
+    const {data:rows,error:readError}=await db.from('fin_entries').select('*').limit(10000);
     if(readError)throw readError;
     state.entries=rows||[];
   }
