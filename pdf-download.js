@@ -22,7 +22,7 @@
       const clone = paper.cloneNode(true);
       const host = document.createElement('div');
       host.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;background:white;z-index:-1';
-      clone.style.cssText = 'position:relative;width:210mm;min-height:297mm;box-sizing:border-box;padding:34mm 55mm 26mm 19mm;font:9.2pt/1.28 Arial,Helvetica,sans-serif;color:#111;background:#fff';
+      clone.style.cssText = 'position:relative;width:210mm;min-height:282mm;box-sizing:border-box;padding:34mm 55mm 23mm 19mm;font:9.2pt/1.28 Arial,Helvetica,sans-serif;color:#111;background:#fff';
       const css = document.createElement('style');
       css.textContent = `
         .doc-logo{position:absolute;right:12mm;top:12mm;width:57mm;height:17mm;object-fit:contain}
@@ -54,7 +54,7 @@
           image:{type:'jpeg',quality:0.98},
           html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0},
           jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-          pagebreak:{mode:['css','legacy']}
+          pagebreak:{mode:['legacy']}
         }).from(clone).save();
       } finally {host.remove();}
     } catch (e) {
