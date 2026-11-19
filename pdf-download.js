@@ -20,6 +20,47 @@
       const paper = document.querySelector('#printarea .paper');
       if (!paper) throw new Error('Dokument konnte nicht aufgebaut werden.');
       const clone = paper.cloneNode(true);
+      // V28: finale PDF-Struktur bereinigen (auch alte gespeicherte Freitexte).
+      // Bezugsnummer nur im Kopf, keine zweite Zeile unterhalb.
+      const sourceNumber = d.sourceId && typeof doc === 'function' ? (doc(d.sourceId)?.number || '') : '';
+      const title = clone.querySelector('.doc-title');
+      if (title) {
+        Array.from(title.children).forEach((el, index) => {
+          if (index >= 2) el.remove();
+        });
+        if (sourceNumber) {
+          const ref = document.createElement('div');
+          ref.style.cssText = 'font-size:8pt;font-style:normal;font-weight:400';
+          ref.textContent = 'Bezug: ' + sourceNumber;
+          title.appendChild(ref);
+        }
+      }
+      // Nur die Konten im Zahlungsabschnitt behalten.
+      // Textknoten vor dem Zahlungshinweis filtern, unabhängig vom ursprünglichen Feld.
+      const paymentMarker = 'Bitte überweisen Sie den Rechnungsbetrag';
+      const textNodes = [];
+      const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+      let paymentReached = false;
+      for (const node of textNodes) {
+        const value = node.nodeValue || '';
+        if (value.includes(paymentMarker)) { paymentReached = true; continue; }
+        if (paymentReached) continue;
+        // Alle weiteren Referenzzeilen außer der neu erzeugten Bezug-Zeile entfernen.
+        if (/^\s*(?:Auftragsbestätigung|Angebot|Lieferschein|Rechnung)\s*:\s*[QICD][_.-]\s*\d{4}/i.test(value)) {
+          node.nodeValue = ''; continue;
+        }
+        if (d.type === 'I' && /(?:FYRST|Sparkasse\s+Bensheim|IBAN|BIC)/i.test(value)) {
+          node.nodeValue = value.split(/\r?\n/).filter(line =>
+            !/(?:FYRST|Sparkasse\s+Bensheim|IBAN|BIC)/i.test(line)
+          ).join('\n');
+        }
+      }
+      // Überflüssige Leerzeilen und <br>-Reste in den Freitextblöcken entfernen.
+      for (const el of clone.querySelectorAll('.document-notes')) {
+        if (!el.textContent.trim()) el.remove();
+      }
+
       const host = document.createElement('div');
       host.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;background:white;z-index:-1';
       clone.style.cssText = 'position:relative;width:210mm;min-height:282mm;box-sizing:border-box;padding:34mm 55mm 23mm 19mm;font:9.2pt/1.28 Arial,Helvetica,sans-serif;color:#111;background:#fff';
