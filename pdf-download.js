@@ -81,7 +81,7 @@
         .totals>div{display:flex;justify-content:space-between;gap:10px;padding:2mm 0}
         .totals .grand{border-top:2px solid #111;margin-top:1mm;font-weight:700}
         .document-notes{margin-top:13mm;font-size:9pt;line-height:1.5}
-        .company-side{position:absolute;right:8mm;bottom:19mm;width:39mm;text-align:right;font-size:6.3pt;line-height:1.65;color:#777}
+        .delivery-signature{margin-top:18mm;font-size:8.5pt;break-inside:avoid;page-break-inside:avoid}.delivery-signature-line{display:flex;gap:16mm;margin-top:19mm}.delivery-signature-line span{flex:1;border-top:1px solid #333;padding-top:2mm;font-size:7.5pt}.company-side{position:absolute;right:8mm;bottom:19mm;width:39mm;text-align:right;font-size:6.3pt;line-height:1.65;color:#777}
         .page-number{position:absolute;bottom:10mm;left:50%;font-size:6.5pt;color:#555}
       `;
       host.append(css,clone);
