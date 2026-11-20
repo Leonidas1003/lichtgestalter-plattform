@@ -64,16 +64,30 @@ async function lgPreviewAfterSave(did){
 async function lgShowDocPreview(did,afterSave=false){
  const d=doc(did);if(!d)return;
  const draft=canEditDoc(d);
- modal('Dokumentvorschau · '+esc(docDisplayNumber(d)),`<div style="width:min(85vw,900px);max-width:100%"><p>${draft?'Entwurf – noch nicht freigegeben.':'Freigegebenes Dokument – Original bleibt unverändert.'}</p><div id="lg-preview-loading" role="status">PDF-Vorschau wird erstellt …</div><iframe id="lg-preview-frame" title="PDF-Dokumentvorschau" style="display:none;width:100%;height:65vh;border:1px solid #ddd;background:white"></iframe><div class="foot"><button class="secondary" onclick="closeModal()">Schließen</button>${draft?`<button class="secondary" onclick="documentForm('${did}')">Bearbeiten</button><button onclick="releaseDocument('${did}')">Freigeben & PDF herunterladen</button>`:`<button class="secondary" onclick="downloadDoc('${did}')">PDF herunterladen</button><button onclick="createRevisionDraft('${did}')">Neue Version als Entwurf</button>`}</div></div>`);
+ modal('Dokumentvorschau · '+esc(docDisplayNumber(d)),`<div style="width:min(85vw,900px);max-width:100%"><p>${draft?'Entwurf – noch nicht freigegeben.':'Freigegebenes Dokument – Original bleibt unverändert.'}</p><div id="lg-preview-loading" role="status">Dokument wird aufgebaut …</div><iframe id="lg-preview-frame" title="Dokumentvorschau" style="display:none;width:100%;height:65vh;border:1px solid #ddd;background:white"></iframe><div class="foot"><button class="secondary" onclick="closeModal()">Schließen</button>${draft?`<button class="secondary" onclick="documentForm('${did}')">Bearbeiten</button><button onclick="releaseDocument('${did}')">Freigeben & PDF herunterladen</button>`:`<button class="secondary" onclick="downloadDoc('${did}')">PDF herunterladen</button><button onclick="createRevisionDraft('${did}')">Neue Version als Entwurf</button>`}</div></div>`);
+ const loading=document.getElementById('lg-preview-loading');
+ const frame=document.getElementById('lg-preview-frame');
+ if(!frame)return;
  try{
-  if(afterSave)await lgWaitForSavedDoc(did);
-  if(typeof window.lgGeneratePdfBlob!=='function')throw Error('PDF-Modul fehlt. Bitte pdf-download.js aus V36 hochladen und Browser-Cache leeren.');
-  const blob=await window.lgGeneratePdfBlob(did);
-  const frame=document.getElementById('lg-preview-frame');if(!frame)return;
-  const url=URL.createObjectURL(blob);frame.src=url;frame.style.display='block';document.getElementById('lg-preview-loading')?.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),120000);
- }catch(e){const el=document.getElementById('lg-preview-loading');if(el)el.textContent='PDF-Vorschau nicht verfügbar: '+e.message;}
+  // Render the document immediately; PDF conversion is not a prerequisite for viewing.
+  const originalPrint=window.print;
+  try{window.print=()=>{};printDoc(did);}finally{window.print=originalPrint;}
+  const paper=document.querySelector('#printarea .paper');
+  if(!paper)throw Error('Dokument konnte nicht aufgebaut werden.');
+  const markup=paper.outerHTML;
+  const styles=[...document.querySelectorAll('link[rel="stylesheet"]')].map(x=>`<link rel="stylesheet" href="${x.href}">`).join('');
+  const embedded=[...document.querySelectorAll('style')].map(x=>x.outerHTML).join('');
+  frame.srcdoc=`<!doctype html><html><head><base href="${document.baseURI}"><meta charset="utf-8">${styles}${embedded}<style>html,body{margin:0!important;padding:0!important;background:#e7eaf0!important;color:#111!important}body{display:flex;justify-content:center;align-items:flex-start;padding:20px!important}.paper{position:relative!important;display:block!important;visibility:visible!important;width:210mm!important;min-height:297mm!important;margin:0 auto!important;padding:34mm 55mm 23mm 19mm!important;box-sizing:border-box!important;background:white!important;color:#111!important;box-shadow:0 2px 15px #aab!important;font:9.2pt/1.28 Arial,Helvetica,sans-serif!important}.doc-logo{position:absolute;right:12mm;top:12mm;width:57mm;height:17mm;object-fit:contain}</style></head><body>${markup}</body></html>`;
+  frame.style.display='block';
+  if(loading)loading.remove();
+  // Persistence is checked separately and must not leave the preview spinning.
+  if(afterSave){try{await lgWaitForSavedDoc(did)}catch(e){
+    const notice=document.createElement('p');notice.style.color='#b45309';notice.textContent='Achtung: Entwurf ist noch nicht sicher in Supabase gespeichert: '+e.message;
+    frame.parentElement.insertBefore(notice,frame);
+  }}
+ }catch(e){if(loading)loading.textContent='Vorschau konnte nicht aufgebaut werden: '+e.message;}
 }
+
 function createRevisionDraft(did){
  const original=doc(did);if(!original||canEditDoc(original))return alert('Nur freigegebene Dokumente können als neue Version übernommen werden.');
  if(!confirm('Neuen bearbeitbaren Entwurf aus diesem Dokument erstellen? Das Original bleibt unverändert.'))return;
