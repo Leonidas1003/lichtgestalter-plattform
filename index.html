@@ -147,16 +147,27 @@ async function deleteDocument(did){
  if(!confirm('Entwurf endgültig löschen?'))return;
  if(!cloudClient||!cloudReady||lgBlocked)return alert('Supabase ist nicht bereit.');
  try{
-  // Dieselbe synchronisierte Schreibwarteschlange wie beim Speichern verwenden.
-  // Ein separater RPC würde mit dem automatischen lgFlush kollidieren.
+  // Vor dem Loeschen ausstehende Einfuegungen abschliessen, damit die
+  // Versionsnummer fuer den RPC bereits in lgBaseline vorhanden ist.
   while(lgBusy)await new Promise(r=>setTimeout(r,75));
-  await lgFlush();while(lgBusy)await new Promise(r=>setTimeout(r,75));
+  await lgFlush();
+  while(lgBusy)await new Promise(r=>setTimeout(r,75));
   if(lgBlocked)throw Error('Speicherung blockiert.');
-  const original=state.docs.slice();
-  state.docs=state.docs.filter(x=>x.id!==did);
-  await lgFlush();while(lgBusy)await new Promise(r=>setTimeout(r,75));
-  if(lgBlocked){state.docs=original;throw Error('Löschen wurde von Supabase nicht bestätigt.');}
+  const entry=lgBaseline.docs[did];
+  if(!entry)throw Error('Entwurf noch nicht in Supabase bestaetigt. Bitte erneut versuchen.');
+  // Exklusiver Schreibzugriff: kein paralleler automatischer Flush.
+  lgBusy=true;
+  try{
+   const {error}=await cloudClient.rpc('lg_apply_changes',{
+    p_changes:[{kind:'docs',id:did,op:'delete',version:entry.version}]
+   });
+   if(error)throw Error(error.message);
+   delete lgBaseline.docs[did];
+   state.docs=state.docs.filter(x=>x.id!==did);
+   try{localStorage.setItem(KEY,JSON.stringify(state));}catch(_e){}
+  }finally{lgBusy=false;}
   closeModal();render();
+  if(lgQueued){lgQueued=false;void lgFlush();}
  }catch(e){alert('Löschen fehlgeschlagen: '+e.message);}
 }
 // V27: cleanse only PDF display, never stored records.
