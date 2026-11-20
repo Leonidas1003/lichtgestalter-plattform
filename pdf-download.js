@@ -19,6 +19,7 @@
       const paper = document.querySelector('#printarea .paper');
       if (!paper) throw new Error('Dokument konnte nicht aufgebaut werden.');
       const clone = paper.cloneNode(true);
+      if(d.type==='Q'&&d.revisionLabel&&!d.number){const title=clone.querySelector('.doc-title > div');if(title)title.textContent='Angebot '+d.revisionLabel+' – ENTWURF';}
       // V28: finale PDF-Struktur bereinigen (auch alte gespeicherte Freitexte).
       // Bezugsnummer nur im Kopf, keine zweite Zeile unterhalb.
       const sourceNumber = d.sourceId && typeof doc === 'function' ? (doc(d.sourceId)?.number || '') : '';
