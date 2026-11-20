@@ -43,18 +43,45 @@ function toggleDeduction(id,checked){editing.deductionIds=editing.deductionIds||
 function deductionTotalsDirect(ids){let net=0,tax=0;for(const x of resolvedDeductions(ids)){const d=doc(x);if(!d)continue;const original=amount(d), earlier=resolvedDeductions(d.deductionIds||[]);const priorNet=earlier.reduce((a,z)=>a+Math.max(0,amount(doc(z)||{})),0);const priorTax=earlier.reduce((a,z)=>{const q=doc(z);return a+(q?Math.round(amount(q)*Number(q.vat??0))/100:0)},0);net+=Math.max(0,original-priorNet);tax+=Math.max(0,Math.round(original*Number(d.vat??0))/100-priorTax)}return {net:Math.round(net*100)/100,tax:Math.round(tax*100)/100}}
 function deductionTotals(ids){let net=0,tax=0;for(const did of resolvedDeductions(ids)){const d=doc(did);if(!d)continue;const n=amount(d),previous=deductionTotalsDirect(d.deductionIds||[]);net+=Math.max(0,n-previous.net);tax+=Math.max(0,Math.round(n*Number(d.vat??0))/100-previous.tax)}return {net:Math.round(net*100)/100,tax:Math.round(tax*100)/100}}
 function renderDeductionPreview(){let el=document.getElementById('deductionPreview');if(!el)return;let v=deductionTotals(editing.deductionIds);el.innerHTML='<b>Anrechnung: '+eur(v.net)+' netto + '+eur(v.tax)+' MwSt. = '+eur(v.net+v.tax)+' brutto</b>'}
-function saveDocument(){let type=val('d_type'),projectId=val('d_project'),customerId=val('d_customer');if(!customerId)return alert('Bitte Kunden auswählen.');if(projectId&&proj(projectId)?.customerId!==customerId)return alert('Projekt und Kunde müssen übereinstimmen.');if(editing.sourceId&&doc(editing.sourceId)?.customerId!==customerId)return alert('Quelldokument gehört zu einem anderen Kunden.');if(!editing.lines.length)return alert('Mindestens eine Position hinzufügen.');if(editing.lines.some(l=>Number(l.percent)<0||Number(l.percent)>100||Number(l.discount??0)<0||Number(l.discount??0)>100||Number(l.qty)<0||Number(l.price)<0))return alert('Ungültige Position: Prozent 0–100, Menge/Preis nicht negativ.');if(type==='Q')editing.lines.forEach(l=>l.percent=100);if(type==='I'&&(editing.deductionIds||[]).some(x=>!acontoDocs().some(a=>a.id===x)))return alert('Ungültige A-conto-Auswahl.');let d=editing.id?doc(editing.id):null;if(d&&!canEditDoc(d))return alert('Freigegebene Dokumente sind nicht bearbeitbar.');if(!d){d={id:id(),number:'',approvalState:'draft'};state.docs.push(d)}else if(d.type!==type){return alert('Dokumenttyp bestehender Dokumente nicht ändern.')}Object.assign(d,{type,projectId,customerId,date:val('d_date'),status:'Entwurf',approvalState:'draft',vat:Number(val('d_vat')||0),serviceDate:val('d_service'),deliveryTerm:val('d_delivery'),payment:val('d_payment'),notes:val('d_notes'),introText:val('d_intro'),outroText:val('d_outro'),deductionIds:type==='I'?(editing.deductionIds||[]):[],sourceId:editing.sourceId,lines:editing.lines.map(l=>({...l,qty:Number(l.qty),price:Number(l.price),discount:Number(l.discount??0),percent:Number(l.percent)}))});save();closeModal();render();if(typeof downloadDoc==='function'){setTimeout(()=>downloadDoc(d.id),300)}}
+function saveDocument(){let type=val('d_type'),projectId=val('d_project'),customerId=val('d_customer');if(!customerId)return alert('Bitte Kunden auswählen.');if(projectId&&proj(projectId)?.customerId!==customerId)return alert('Projekt und Kunde müssen übereinstimmen.');if(editing.sourceId&&doc(editing.sourceId)?.customerId!==customerId)return alert('Quelldokument gehört zu einem anderen Kunden.');if(!editing.lines.length)return alert('Mindestens eine Position hinzufügen.');if(editing.lines.some(l=>Number(l.percent)<0||Number(l.percent)>100||Number(l.discount??0)<0||Number(l.discount??0)>100||Number(l.qty)<0||Number(l.price)<0))return alert('Ungültige Position: Prozent 0–100, Menge/Preis nicht negativ.');if(type==='Q')editing.lines.forEach(l=>l.percent=100);if(type==='I'&&(editing.deductionIds||[]).some(x=>!acontoDocs().some(a=>a.id===x)))return alert('Ungültige A-conto-Auswahl.');let d=editing.id?doc(editing.id):null;if(d&&!canEditDoc(d))return alert('Freigegebene Dokumente sind nicht bearbeitbar.');if(!d){d={id:id(),number:'',approvalState:'draft'};state.docs.push(d)}else if(d.type!==type){return alert('Dokumenttyp bestehender Dokumente nicht ändern.')}Object.assign(d,{type,projectId,customerId,date:val('d_date'),status:'Entwurf',approvalState:'draft',vat:Number(val('d_vat')||0),serviceDate:val('d_service'),deliveryTerm:val('d_delivery'),payment:val('d_payment'),notes:val('d_notes'),introText:val('d_intro'),outroText:val('d_outro'),deductionIds:type==='I'?(editing.deductionIds||[]):[],sourceId:editing.sourceId,lines:editing.lines.map(l=>({...l,qty:Number(l.qty),price:Number(l.price),discount:Number(l.discount??0),percent:Number(l.percent)}))});save();closeModal();render();void lgPreviewAfterSave(d.id)}
 function docApproval(d){return d.number?'issued':(d.approvalState==='issued'?'issued':'draft')}
 function canEditDoc(d){return docApproval(d)==='draft'&&!d.number}
 function docActions(d){const a=docApproval(d);return a==='draft'?`<button class="link" onclick="releaseDocument('${d.id}')">Freigeben</button>`:(d.type==='I'?`<button class="link" onclick="createCredit('${d.id}')">Gutschrift</button>`:'')}
+async function lgWaitForSavedDoc(did){
+ if(!cloudClient||!cloudReady)throw Error('Supabase ist nicht verbunden.');
+ while(lgBusy)await new Promise(r=>setTimeout(r,75));
+ if(lgBlocked)throw Error('Speicherung blockiert. Bitte Speicherfehler beheben.');
+ await lgFlush();
+ while(lgBusy)await new Promise(r=>setTimeout(r,75));
+ if(lgBlocked)throw Error('Entwurf konnte nicht gespeichert werden.');
+ if(!lgBaseline.docs[did])throw Error('Entwurf wurde nicht in Supabase gespeichert.');
+}
+async function lgPreviewAfterSave(did){
+ try{await lgWaitForSavedDoc(did);await lgShowDocPreview(did)}
+ catch(e){alert('Vorschau konnte nicht geöffnet werden: '+e.message)}
+}
+async function lgShowDocPreview(did){
+ const d=doc(did);if(!d)return;
+ modal('Dokumentvorschau · '+esc(d.number||'Entwurf'),`<div style="min-width:min(85vw,850px)"><p>Dokument gespeichert. Prüfe die Vorschau und gib den Entwurf frei oder schließe sie.</p><div id="lg-preview-loading">PDF-Vorschau wird erstellt …</div><iframe id="lg-preview-frame" title="PDF-Dokumentvorschau" style="display:none;width:100%;height:65vh;border:1px solid #ddd;background:white"></iframe><div class="foot"><button class="secondary" onclick="closeModal()">Schließen</button>${canEditDoc(d)?`<button onclick="releaseDocument('${did}')">Jetzt freigeben</button>`:''}</div></div>`);
+ try{
+  const blob=await window.lgGeneratePdfBlob(did);
+  if(!document.getElementById('lg-preview-frame'))return;
+  const url=URL.createObjectURL(blob);const frame=document.getElementById('lg-preview-frame');
+  frame.src=url;frame.style.display='block';document.getElementById('lg-preview-loading')?.remove();
+  frame.addEventListener('load',()=>setTimeout(()=>URL.revokeObjectURL(url),60000),{once:true});
+ }catch(e){const el=document.getElementById('lg-preview-loading');if(el)el.textContent='PDF-Vorschau nicht verfügbar: '+e.message;}
+}
 async function releaseDocument(did){
  const d=doc(did);if(!d||docApproval(d)!=='draft'||d.number)return alert('Nur nummernlose Entwürfe können freigegeben werden.');
- if(!confirm('Dokument jetzt verbindlich freigeben und endgültige Nummer vergeben? Danach kann es nicht mehr gelöscht oder bearbeitet werden.'))return;
- if(typeof lgFlush!=='function'||!cloudClient)return alert('Supabase ist nicht verbunden.');
- await lgFlush();while(lgBusy){await new Promise(r=>setTimeout(r,75));}if(lgBlocked)return;
- const {data,error}=await cloudClient.rpc('lg_release_document',{p_doc_id:did});
- if(error)return alert('Freigabe fehlgeschlagen: '+error.message);
- await lgLoad();if(typeof downloadDoc==='function')setTimeout(()=>downloadDoc(did),200);alert('Freigegeben: '+data.number);
+ if(!confirm('Dokument verbindlich freigeben und endgültige Nummer vergeben? Danach ist es gesperrt.'))return;
+ try{
+  await lgWaitForSavedDoc(did);
+  const {data,error}=await cloudClient.rpc('lg_release_document',{p_doc_id:did});
+  if(error)throw Error(error.message);
+  await lgLoad();closeModal();
+  alert('Freigegeben: '+data.number+' – PDF wird heruntergeladen.');
+  await downloadDoc(did);
+ }catch(e){alert('Freigabe fehlgeschlagen: '+e.message+'\n\nDer Entwurf bleibt erhalten.');}
 }
 function createCredit(invoiceId){
  const inv=doc(invoiceId);if(!inv||inv.type!=='I'||docApproval(inv)!=='issued')return alert('Nur freigegebene Rechnungen können gutgeschrieben werden.');
@@ -69,7 +96,7 @@ function createCredit(invoiceId){
  const reason=prompt('Grund der Gutschrift (Pflichtfeld):');if(!reason||!reason.trim())return;
  const net=Math.round(value/(1+vat/100)*100)/100;
  const d={id:id(),type:'G',number:'',approvalState:'draft',status:'Entwurf',customerId:inv.customerId,projectId:inv.projectId,date:today(),vat,creditFor:invoiceId,creditGross:value,creditReason:reason.trim(),sourceId:invoiceId,lines:[{id:id(),sku:'',description:'Gutschrift zu Rechnung '+inv.number+' – '+reason.trim(),qty:1,price:net,discount:0,percent:100}],notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:''};
- state.docs.push(d);save();render();alert('Gutschrift als Entwurf angelegt. Bitte prüfen und anschließend freigeben.');
+ state.docs.push(d);save();render();void lgPreviewAfterSave(d.id);
 }
 async function deleteDocument(did){
  const d=doc(did);if(!d)return;

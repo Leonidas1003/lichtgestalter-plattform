@@ -3,14 +3,13 @@
    Keine Änderung an Daten oder Dokumenten. */
 (function () {
   let busy = false;
-  window.downloadDoc = async function (did) {
-    if (busy) return;
+  window.lgGeneratePdfBlob = async function (did) {
+    if (busy) throw Error('PDF-Erstellung läuft bereits.');
     if (typeof html2pdf !== 'function') {
-      alert('PDF-Bibliothek konnte nicht geladen werden. Bitte Seite neu laden.');
-      return;
+      throw Error('PDF-Bibliothek konnte nicht geladen werden.');
     }
     const d = typeof doc === 'function' ? doc(did) : null;
-    if (!d) return alert('Dokument nicht gefunden.');
+    if (!d) throw Error('Dokument nicht gefunden.');
     busy = true;
     const oldPrint = window.print;
     try {
@@ -89,20 +88,29 @@
       try {
         const img = clone.querySelector('.doc-logo');
         if (img && !img.complete) await new Promise(resolve => {img.onload=resolve;img.onerror=resolve;});
-        await html2pdf().set({
+        const pdfBlob = await html2pdf().set({
           margin:0,
           filename:(d.number || 'Dokument').replace(/[^a-zA-Z0-9_.-]/g,'_')+'.pdf',
           image:{type:'jpeg',quality:0.98},
           html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0},
           jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
           pagebreak:{mode:['legacy']}
-        }).from(clone).save();
+        }).from(clone).outputPdf('blob');
+        return pdfBlob;
       } finally {host.remove();}
     } catch (e) {
-      alert('PDF-Download fehlgeschlagen: '+(e.message || e));
+      throw e;
     } finally {
       window.print = oldPrint;
       busy = false;
     }
+  };
+  window.downloadDoc = async function(did){
+    try{
+      const blob=await window.lgGeneratePdfBlob(did);
+      const d=doc(did),url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download=(d?.number||'Entwurf').replace(/[^a-zA-Z0-9_.-]/g,'_')+'.pdf';
+      document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(e){alert('PDF-Download fehlgeschlagen: '+e.message)}
   };
 })();
