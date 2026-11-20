@@ -6,7 +6,7 @@ const legacyNav=window.nav, legacyRender=window.render;
 const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const tiles=[['Kundendaten verwalten','Kunden, Ansprechpartner und Projekte','Kunden','👥'],['Dokumente erstellen','Angebote, Rechnungen und Auftragsabwicklung','Pipeline','📄'],['Finanzdaten','Liquiditätsplanung, Kredite und Rentabilität','Finanzdaten','📈'],['Controlling','Einnahmen nach Kunden und Ausgaben nach Lieferanten','Controlling','📊']];
 function home(){return `<section class="lg-portal"><p class="lg-eyebrow">LICHTGESTALTER PLATTFORM</p><h2>Was möchtest du heute bearbeiten?</h2><p class="lg-sub">Wähle einen Arbeitsbereich. Alle Bereiche nutzen dieselbe Anmeldung und dieselbe Supabase-Datenbank.</p><div class="lg-tiles">${tiles.map(t=>`<button type="button" class="lg-tile" data-go="${t[2]}"><span class="lg-tile-icon">${t[3]}</span><strong>${t[0]}</strong><span>${t[1]}</span><span class="lg-tile-next">Öffnen →</span></button>`).join('')}</div></section>`}
-function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Finanzdaten" src="liquiditaet.html?v=42${view==='Controlling'?'#controlling':''}" loading="eager"></iframe></section>`}
+function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Finanzdaten" src="${view==='Controlling'?'controlling.html':'liquiditaet.html'}?v=43" loading="eager"></iframe></section>`}
 function bind(){document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>window.LGPlatform.open(b.dataset.go));}
 const routeKey='lg-platform-view-v21';
 const oldRouteKey='lg-platform-view-v20';
@@ -20,7 +20,7 @@ window.addEventListener('message',e=>{
  if(e.data?.type==='lg-selection'){
   const bar=document.getElementById('lg-global-selection');
   if(!bar)return;
-  if(!e.data.count||!['Finanzdaten','Controlling'].includes(view)){bar.hidden=true;return}
+  if(!e.data.count||view!=='Finanzdaten'){bar.hidden=true;return}
   bar.hidden=false;
   bar.querySelector('[data-count]').textContent=e.data.count;
   bar.querySelector('[data-expenses]').textContent=e.data.expenses;
@@ -36,7 +36,7 @@ window.nav=function(){
  const n=document.getElementById('nav');if(!n)return;
  if(view==='Startseite'){n.innerHTML='';n.style.display='none';return}
  n.style.display='flex';
- if(view==='Finanzdaten'||view==='Controlling'){n.innerHTML='<button type="button" id="lg-back">← Startseite</button><strong style="padding:10px">${view}</strong>';}
+ if(view==='Finanzdaten'||view==='Controlling'){n.innerHTML='<button type="button" id="lg-back">← Startseite</button><strong style="padding:10px">'+(view==='Finanzdaten'?'Finanzübersicht':'Controlling')+'</strong>';}
  else {legacyNav();const back=document.createElement('button');back.type='button';back.id='lg-back';back.textContent='← Startseite';n.prepend(back);}
  document.getElementById('lg-back').onclick=()=>window.LGPlatform.home();
 };
