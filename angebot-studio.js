@@ -46,6 +46,7 @@ const LGStudio=(()=>{
  #app .as-position th{background:#bcbcbc!important;color:#111!important;font-size:11px!important}
  #app .as-position td{border:0!important;border-bottom:1px solid #dedede!important}
  @media(max-width:850px){#app .as-canvas{padding:90px 25px 90px 30px!important}#app .as-protected{position:static!important;width:auto!important;text-align:right!important}}
+ #app .as-pagebreak{break-before:page;page-break-before:always} #app .as-position tr,#app .as-free-table tr{break-inside:avoid;page-break-inside:avoid}
  #app .as-free-table{border-collapse:collapse;width:100%;margin:12px 0 22px;font-size:12px}
  #app .as-free-table th{background:#bdbfc0!important;color:#111!important;font-weight:700;padding:9px;border:1px solid #b6b6b6}
  #app .as-free-table td{padding:9px;border:1px solid #b6b6b6;min-width:35px}
@@ -94,10 +95,10 @@ const LGStudio=(()=>{
    e.preventDefault();const form=e.currentTarget,fd=new FormData(form),name=String(fd.get('name')||'').trim(),number=String(fd.get('number')||'').trim();
    if(!name)return alert('Projektname fehlt.');
    if(number&&state.projects.some(p=>p.number===number))return alert('Diese Projektnummer existiert bereits.');
-   const p={id:id(),name,number,customerId:c.id,phase:typeof phases!=='undefined'?phases[0]:'Angebotsphase',notes:''};
+   const p={id:id(),name,number,customerId:c.id,phase:'Angebotsphase',notes:''};
    state.projects.push(p);save();
-   try{await Promise.race([lgWaitForSavedProject(p.id),new Promise((_,reject)=>setTimeout(()=>reject(Error('Speicherung nach 15 Sekunden nicht bestätigt.')),15000))]);LGStudio.startInternal(p.id)}
-   catch(err){alert('Projekt konnte nicht bestätigt werden: '+err.message+' – bitte in der Projektübersicht prüfen.')}
+   // Öffnet den Editor direkt; die Cloud-Speicherung erfolgt über den vorhandenen zentralen Save-Mechanismus.
+   startInternal(p.id);
   };
  }
  async function lgWaitForSavedProject(pid){
@@ -198,12 +199,19 @@ const LGStudio=(()=>{
   return heads.map((h,i)=>`<th ${i===0?'style="width:8%"':''}><span ${ro?'':'contenteditable="true"'} data-head="${i}">${escape(h)}</span></th>`).join('')+ '<th class="as-edit-only"></th>';
  }
  function freeTables(d,ro){
-  return (d.studioFreeTables||[]).map((t,i)=>`<section class="as-free-block" data-free="${i}"><div class="as-free-controls as-edit-only">${ro?'':`<button onclick="LGStudio.freeRow(${i})">+ Zeile</button><button onclick="LGStudio.freeCol(${i})">+ Spalte</button><button onclick="LGStudio.freeRemove(${i})">Tabelle entfernen</button>`}</div><table class="as-free-table"><tbody>${(t.cells||[]).map((row,r)=>`<tr>${row.map((cell,c)=>`<${r===0?'th':'td'} contenteditable="${!ro}" data-r="${r}" data-c="${c}">${escape(cell)}</${r===0?'th':'td'}>`).join('')}</tr>`).join('')}</tbody></table></section>`).join('');
+  return (d.studioFreeTables||[]).map((t,i)=>`<section class="as-free-block" data-free="${i}"><div class="as-free-controls as-edit-only">${ro?'':`<button onclick="LGStudio.freeRow(${i})">+ Zeile</button><button onclick="LGStudio.freeCol(${i})">+ Spalte</button><button onclick="LGStudio.freeWidth(${i})">Spaltenbreite</button><button onclick="LGStudio.freeMerge(${i})">Zellen verbinden</button><button onclick="LGStudio.freeUnmerge(${i})">Verbindung lösen</button><button onclick="LGStudio.freeRemove(${i})">Entfernen</button>`}</div><table class="as-free-table" style="table-layout:fixed"><colgroup>${(t.widths||t.cells[0].map(()=>100/t.cells[0].length)).map(w=>`<col style="width:${Number(w)}%">`).join('')}</colgroup><tbody>${(t.cells||[]).map((row,r)=>`<tr>${row.map((cell,c)=>{const v=typeof cell==='object'?cell:{text:cell};return v.hidden?'':`<${r===0?'th':'td'} contenteditable="${!ro}" data-r="${r}" data-c="${c}" colspan="${v.colspan||1}">${escape(v.text||'')}</${r===0?'th':'td'}>`}).join('')}</tr>`).join('')}</tbody></table></section>`).join('');
  }
- function freeAdd(){const d=collect();d.studioFreeTables=d.studioFreeTables||[];d.studioFreeTables.push({cells:[['Spalte 1','Spalte 2'],['','']]});open(d.id);dirty=true}
+ function freeAdd(){const d=collect();d.studioFreeTables=d.studioFreeTables||[];d.studioFreeTables.push({cells:[['Spalte 1','Spalte 2'],['','']],widths:[50,50]});open(d.id);dirty=true}
  function freeRow(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;t.cells.push(Array(t.cells[0].length).fill(''));open(d.id);dirty=true}
- function freeCol(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;t.cells.forEach(r=>r.push(''));open(d.id);dirty=true}
+ function freeCol(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;t.cells.forEach(r=>r.push(''));t.widths=Array(t.cells[0].length).fill(100/t.cells[0].length);open(d.id);dirty=true}
+ function freeWidth(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;const input=prompt('Spaltenbreiten in Prozent, durch Kommas getrennt (z. B. 30,70)',(t.widths||[]).join(','));if(input===null)return;const widths=input.split(',').map(Number);if(widths.length!==t.cells[0].length||widths.some(w=>!Number.isFinite(w)||w<=0)||Math.abs(widths.reduce((a,b)=>a+b,0)-100)>0.01)return alert('Bitte für jede Spalte einen positiven Prozentwert eingeben; Summe 100.');t.widths=widths;open(d.id);dirty=true}
+ function freeMerge(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;const r=Number(prompt('Zeile verbinden (1 = Kopfzeile):','1'))-1;if(!Number.isInteger(r)||r<0||r>=t.cells.length)return alert('Ungültige Zeile.');const start=Number(prompt('Ab Spalte (1-basiert):','1'))-1;const count=Number(prompt('Wie viele Spalten verbinden?','2'));if(!Number.isInteger(start)||!Number.isInteger(count)||start<0||count<2||start+count>t.cells[r].length)return alert('Ungültiger Bereich.');const row=t.cells[r];if(row.slice(start,start+count).some(c=>typeof c==='object'&&(c.hidden||c.colspan>1)))return alert('Bereich enthält bereits verbundene Zellen.');row[start]={text:row.slice(start,start+count).map(c=>typeof c==='object'?c.text:c).filter(Boolean).join(' '),colspan:count};for(let c=start+1;c<start+count;c++)row[c]={text:'',hidden:true};open(d.id);dirty=true}
+ function freeUnmerge(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;const r=Number(prompt('Zeile (1-basiert):','1'))-1;if(!Number.isInteger(r)||r<0||r>=t.cells.length)return alert('Ungültige Zeile.');t.cells[r]=t.cells[r].map(c=>typeof c==='object'?c.text||'':c);open(d.id);dirty=true}
  function freeRemove(i){if(!confirm('Freie Tabelle entfernen?'))return;const d=collect();d.studioFreeTables.splice(i,1);open(d.id);dirty=true}
+ function calcAdd(){const d=collect();d.studioCalcGroups=d.studioCalcGroups||[];d.studioCalcGroups.push({title:'Weitere Kalkulation',lines:[{id:id(),description:'',qty:1,price:0,discount:0,percent:100}]});open(d.id);dirty=true}
+ function calcRemove(i){if(!confirm('Diese Kalkulationstabelle entfernen?'))return;const d=collect();d.studioCalcGroups.splice(i,1);open(d.id);dirty=true}
+ function calcGroups(d,ro){return (d.studioCalcGroups||[]).map((g,i)=>`<section data-calc="${i}"><h3 contenteditable="${!ro}" data-calc-title>${escape(g.title||'Weitere Kalkulation')}</h3>${ro?'':`<button class="as-edit-only" onclick="LGStudio.calcLine(${i})">+ Position</button><button class="as-edit-only danger" onclick="LGStudio.calcRemove(${i})">Tabelle entfernen</button>`}<table class="as-position"><thead><tr>${calcHeaders(d,ro)}</tr></thead><tbody class="as-extra-lines">${lineRows({lines:g.lines},ro)}</tbody></table></section>`).join('')}
+ function calcLine(i){const d=collect();d.studioCalcGroups[i].lines.push({id:id(),description:'',qty:1,price:0,discount:0,percent:100});open(d.id);dirty=true}
  function lineRows(d,readonly){
   return (d.lines||[]).map((l,i)=>`<tr data-line="${i}"><td>${i+1}</td><td><input aria-label="Beschreibung" data-key="description" value="${escape(l.description)}" ${readonly?'disabled':''}></td><td><input aria-label="Menge" type="number" min="0" step="0.01" data-key="qty" value="${Number(l.qty||0)}" ${readonly?'disabled':''}></td><td><input aria-label="Einzelpreis" type="number" min="0" step="0.01" data-key="price" value="${Number(l.price||0)}" ${readonly?'disabled':''}></td><td><input aria-label="Rabatt" type="number" min="0" max="100" step="0.01" data-key="discount" value="${Number(l.discount||0)}" ${readonly?'disabled':''}></td><td>${eur(Number(l.qty||0)*Number(l.price||0)*(1-Number(l.discount||0)/100))}</td><td>${readonly?'':`<button class="danger" onclick="LGStudio.removeLine(${i})">×</button>`}</td></tr>`).join('');
  }
@@ -219,17 +227,17 @@ const LGStudio=(()=>{
   <h2>${d.type==='Q'?'Angebot':'Auftragsbestätigung'} Nr. ${escape(d.number||'Entwurf')}</h2><p><b>Projekt Nr. ${escape(proj(d.projectId)?.number||proj(d.projectId)?.projectNumber||'—')}</b></p><p style="text-align:right">Datum: ${escape(d.date)}</p>
   <div id="as-top" class="as-body" contenteditable="${!ro}" spellcheck="true">${cleanHtml(d.studioTop||initial())}</div>
   <h3>Positionen</h3><table class="as-position"><thead><tr>${calcHeaders(d,ro)}</tr></thead><tbody id="as-lines">${lineRows(d,ro)}</tbody></table>
-  <div class="as-money">Netto: <span id="as-total">${eur(amount(d))}</span></div>
+  <div id="as-extra-calc">${calcGroups(d,ro)}</div><div class="as-money">Netto: <span id="as-total">${eur(amount(d))}</span></div>
   <div id="as-free-tables">${freeTables(d,ro)}</div><div id="as-bottom" class="as-body" contenteditable="${!ro}" spellcheck="true">${cleanHtml(d.studioBottom||'<p><br></p>')}</div>
   <div class="as-protected">${escape(state.settings.company||'Die Lichtgestalter')}<br>${escape(state.settings.address||'')}<br>${escape(state.settings.email||'')}</div></div></div>
-  ${!ro?`<div class="as-tools"><button onclick="LGStudio.format('bold')"><b>Fett</b></button><button onclick="LGStudio.format('italic')"><i>Kursiv</i></button><button onclick="LGStudio.format('underline')"><u>Unterstrichen</u></button><button onclick="LGStudio.format('insertUnorderedList')">Liste</button><button onclick="LGStudio.heading()">Überschrift</button><button onclick="LGStudio.table()">+ Zusatztabelle</button><button onclick="LGStudio.image()">+ Bild</button><button onclick="LGStudio.line()">+ Kalkulationsposition</button><button onclick="LGStudio.freeAdd()">+ Freie Tabelle</button></div>`:''}
+  ${!ro?`<div class="as-tools"><button onclick="LGStudio.format('bold')"><b>Fett</b></button><button onclick="LGStudio.format('italic')"><i>Kursiv</i></button><button onclick="LGStudio.format('underline')"><u>Unterstrichen</u></button><button onclick="LGStudio.format('insertUnorderedList')">Liste</button><button onclick="LGStudio.heading()">Überschrift</button><button onclick="LGStudio.table()">+ Zusatztabelle</button><button onclick="LGStudio.image()">+ Bild</button><button onclick="LGStudio.line()">+ Kalkulationsposition</button><button onclick="LGStudio.freeAdd()">+ Freie Tabelle</button><button onclick="LGStudio.calcAdd()">+ Kalkulationstabelle</button><button onclick="LGStudio.pageBreak()">+ Seitenumbruch</button></div>`:''}
 </div></div></section>`;
   if(!ro){
-   for(const e of app.querySelectorAll('#as-top,#as-bottom,#as-lines,#as-date,#as-vat,#as-free-tables,.as-position thead'))e.addEventListener('input',()=>{dirty=true;updateTotals()});
+   for(const e of app.querySelectorAll('#as-top,#as-bottom,#as-lines,#as-extra-calc,#as-date,#as-vat,#as-free-tables,.as-position thead'))e.addEventListener('input',()=>{dirty=true;updateTotals()});
   }
  }
  function updateTotals(){
-  let sum=0;document.querySelectorAll('#as-lines tr').forEach(tr=>{const v=k=>Number(tr.querySelector(`[data-key="${k}"]`)?.value||0);sum+=v('qty')*v('price')*(1-v('discount')/100);const cell=tr.children[5];if(cell)cell.textContent=eur(v('qty')*v('price')*(1-v('discount')/100))});
+  let sum=0;document.querySelectorAll('#as-lines tr,.as-extra-lines tr').forEach(tr=>{const v=k=>Number(tr.querySelector(`[data-key="${k}"]`)?.value||0);sum+=v('qty')*v('price')*(1-v('discount')/100);const cell=tr.children[5];if(cell)cell.textContent=eur(v('qty')*v('price')*(1-v('discount')/100))});
   const e=document.getElementById('as-total');if(e)e.textContent=eur(sum);
  }
  function collect(){
@@ -237,9 +245,12 @@ const LGStudio=(()=>{
   const lines=[...document.querySelectorAll('#as-lines tr')].map((tr,i)=>{const v=k=>tr.querySelector(`[data-key="${k}"]`)?.value;return {id:d.lines?.[i]?.id||id(),sku:'',description:v('description')||'',qty:Number(v('qty')),price:Number(v('price')),discount:Number(v('discount')),percent:100}});
   if(!lines.length)throw Error('Mindestens eine Position erforderlich.');
   if(lines.some(x=>!Number.isFinite(x.qty)||!Number.isFinite(x.price)||x.qty<0||x.price<0||x.discount<0||x.discount>100))throw Error('Mengen, Preise oder Rabatte sind ungültig.');
-  const heads=[...document.querySelectorAll('[data-head]')].map(e=>e.textContent.trim());
-  const free=[...document.querySelectorAll('[data-free]')].map(block=>({cells:[...block.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(cell=>cell.textContent))}));
-  Object.assign(d,{studioCalcHeadings:heads,studioFreeTables:free,studioTop:cleanHtml(document.getElementById('as-top').innerHTML),studioBottom:cleanHtml(document.getElementById('as-bottom').innerHTML),date:document.getElementById('as-date').value,vat:Number(document.getElementById('as-vat').value),lines});
+  const heads=[...document.querySelectorAll('.as-position:first-of-type [data-head]')].map(e=>e.textContent.trim());
+  const free=[...document.querySelectorAll('[data-free]')].map(block=>{const i=Number(block.dataset.free),old=d.studioFreeTables?.[i]||{};const cells=(old.cells||[]).map(row=>row.map(cell=>typeof cell==='object'?{...cell}:cell));block.querySelectorAll('[data-r][data-c]').forEach(el=>{const r=Number(el.dataset.r),c=Number(el.dataset.c);if(typeof cells[r][c]==='object')cells[r][c].text=el.textContent;else cells[r][c]=el.textContent});return {cells,widths:old.widths}});
+  const groups=[...document.querySelectorAll('[data-calc]')].map((block,i)=>({title:block.querySelector('[data-calc-title]').textContent,lines:[...block.querySelectorAll('.as-extra-lines tr')].map((tr,j)=>{const v=k=>tr.querySelector(`[data-key="${k}"]`)?.value;return {id:d.studioCalcGroups?.[i]?.lines?.[j]?.id||id(),description:v('description')||'',qty:Number(v('qty')),price:Number(v('price')),discount:Number(v('discount')),percent:100}})}));
+  // Zusätzlich kalkulierte Positionen bleiben strukturiert und können in Rechnungen übernommen werden.
+  
+  Object.assign(d,{studioCalcHeadings:heads,studioFreeTables:free,studioCalcGroups:groups,studioTop:cleanHtml(document.getElementById('as-top').innerHTML),studioBottom:cleanHtml(document.getElementById('as-bottom').innerHTML),date:document.getElementById('as-date').value,vat:Number(document.getElementById('as-vat').value),lines});
   return d;
  }
  async function saveDraft(){
@@ -248,6 +259,7 @@ const LGStudio=(()=>{
  }
  async function release(){
   try{const d=collect();if(!confirm('Angebot verbindlich freigeben? Danach ist es schreibgeschützt.'))return;
+   if(d.studioCalcGroups?.length){d.lines=[...d.lines,...d.studioCalcGroups.flatMap(g=>g.lines.map(l=>({...l,id:l.id||id()})))];d.studioCalcGroups=[];}
    save();if(typeof lgFlush==='function')await lgFlush();await lgWaitForSavedDoc(d.id);
    const {data,error}=await cloudClient.rpc('lg_release_document',{p_doc_id:d.id});if(error)throw error;
    await lgLoad();dirty=false;open(d.id);alert('Freigegeben: '+(data?.number||doc(d.id)?.number||''));
@@ -258,6 +270,7 @@ const LGStudio=(()=>{
  function heading(){document.execCommand('formatBlock',false,'h3')}
  function activeEditor(){const sel=window.getSelection(),node=sel?.anchorNode;const e=node?.parentElement?.closest?.('#as-top,#as-bottom');return e||document.getElementById('as-bottom')}
  function table(){const e=activeEditor();e.focus();document.execCommand('insertHTML',false,'<table><tbody><tr><th>Spalte 1</th><th>Spalte 2</th></tr><tr><td>Text</td><td>Text</td></tr></tbody></table><p><br></p>');dirty=true}
+ function pageBreak(){const e=activeEditor();e.focus();document.execCommand('insertHTML',false,'<div class="as-pagebreak" style="break-before:page;page-break-before:always"><hr></div><p><br></p>');dirty=true}
  function image(){const url=prompt('Bild-URL (https://) eingeben:');if(!url)return;if(!/^https:\/\//i.test(url))return alert('Nur HTTPS-Bild-URLs sind erlaubt.');activeEditor().focus();document.execCommand('insertHTML',false,`<img src="${escape(url)}" alt="Angebotsbild" style="max-width:100%;height:auto">`);dirty=true}
  function line(){const d=collect();d.lines.push({id:id(),sku:'',description:'',qty:1,price:0,discount:0,percent:100});open(d.id);dirty=true}
  function removeLine(i){const d=collect();if(d.lines.length<2)return alert('Mindestens eine Position erforderlich.');d.lines.splice(i,1);open(d.id);dirty=true}
@@ -270,7 +283,7 @@ const LGStudio=(()=>{
  async function invoice(did){
   const d=doc(did);if(!d||!locked(d))return alert('Zuerst Dokument freigeben.');
   if(!confirm('Normale Rechnung als Entwurf erstellen? Es werden ausschließlich die Positionen übernommen.'))return;
-  const inv={id:id(),type:'I',number:'',approvalState:'draft',status:'Entwurf',customerId:d.customerId,projectId:d.projectId||'',date:today(),vat:d.vat,sourceId:d.id,quoteId:d.type==='Q'?d.id:'',orderId:d.type==='C'?d.id:'',invoiceKind:'Schlussrechnung',lines:d.lines.map(l=>({...l,id:id(),percent:100})),notes:'',introText:'',outroText:'',payment:'Zahlbar sofort ohne Abzug',deliveryTerm:'',serviceDate:''};
+  const inv={id:id(),type:'I',number:'',approvalState:'draft',status:'Entwurf',customerId:d.customerId,projectId:d.projectId||'',date:today(),vat:d.vat,sourceId:d.id,quoteId:d.type==='Q'?d.id:'',orderId:d.type==='C'?d.id:'',invoiceKind:'Schlussrechnung',lines:[...d.lines,...(d.studioCalcGroups||[]).flatMap(g=>g.lines)].map(l=>({...l,id:id(),percent:100})),notes:'',introText:'',outroText:'',payment:'Zahlbar sofort ohne Abzug',deliveryTerm:'',serviceDate:''};
   state.docs.push(inv);save();window.LGPlatform.open('Rechnungen & Gutschriften');documentForm(inv.id,'I');
  }
  async function exportPdf(){
@@ -283,8 +296,22 @@ const LGStudio=(()=>{
   clone.querySelectorAll('[contenteditable]').forEach(e=>e.removeAttribute('contenteditable'));
   clone.style.cssText='background:white;color:#111;width:190mm;max-width:190mm;min-height:auto;padding:12mm;font-family:Arial,sans-serif';
   const host=document.createElement('div');host.style.cssText='position:fixed;left:-10000px;top:0;z-index:-1';host.appendChild(clone);document.body.appendChild(host);
-  try{await html2pdf().set({margin:8,filename:(d.number||'Angebotsentwurf')+'.pdf',image:{type:'jpeg',quality:.97},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(clone).save()}
+  try{
+   clone.querySelectorAll('.as-edit-only').forEach(x=>x.remove());
+   clone.querySelectorAll('.as-free-controls').forEach(x=>x.remove());
+   clone.style.paddingTop='27mm';clone.style.paddingBottom='24mm';
+   const pdf=await html2pdf().set({margin:[20,9,21,9],filename:(d.number||'Angebotsentwurf')+'.pdf',image:{type:'jpeg',quality:.97},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(clone).toPdf().get('pdf');
+   const pages=pdf.internal.getNumberOfPages();
+   for(let i=1;i<=pages;i++){
+    pdf.setPage(i);pdf.setFontSize(8);pdf.setTextColor(100);
+    pdf.text(String(i)+' / '+pages,105,287,{align:'center'});
+    const firm=String(state.settings.company||'Die Lichtgestalter');pdf.text(firm,197,271,{align:'right'});
+    const address=String(state.settings.address||'').split('\n').slice(0,3);address.forEach((line,j)=>pdf.text(line,197,275+j*3.5,{align:'right'}));
+    try{const img=document.querySelector('#as-paper .as-lock img');if(img?.complete&&img.naturalWidth){const cv=document.createElement('canvas');cv.width=img.naturalWidth;cv.height=img.naturalHeight;cv.getContext('2d').drawImage(img,0,0);pdf.addImage(cv.toDataURL('image/png'),'PNG',158,7,38,Math.min(17,38*cv.height/cv.width));}}catch(_){}
+   }
+   pdf.save((d.number||'Angebotsentwurf')+'.pdf');
+  }
   catch(e){alert('PDF-Erstellung fehlgeschlagen: '+e.message)}finally{host.remove()}
  }
- return {page,retryNumber,newQuote,freeAdd,freeRow,freeCol,freeRemove,internal,external,deleteDraft,downloadExternal,replaceExternal,releaseExternal,manualDoc,open,saveDraft,release,back,format,heading,table,image,line,removeLine,order,invoice,exportPdf};
+ return {page,retryNumber,newQuote,freeAdd,freeRow,freeCol,freeRemove,freeWidth,freeMerge,freeUnmerge,calcAdd,calcRemove,calcLine,pageBreak,internal,startInternal,external,deleteDraft,downloadExternal,replaceExternal,releaseExternal,manualDoc,open,saveDraft,release,back,format,heading,table,image,line,removeLine,order,invoice,exportPdf};
 })();
