@@ -31,9 +31,9 @@ function customerDetail(cid){
  const s=customerStats(cid);
  modal('Kunde · '+esc(c.name),`<div class="grid2"><div><label>Kundennummer</label><b>${esc(c.number||'–')}</b></div><div><label>Firma / Name</label><b>${esc(c.name)}</b></div><div><label>Ansprechpartner</label><span>${esc(c.contact||'–')}</span></div><div><label>E-Mail</label><span>${esc(c.email||'–')}</span></div></div>
  <div class="stats" style="margin:20px 0"><div class="stat">Angeboten netto<b>${eur(s.offered)}</b></div><div class="stat">Berechnet netto<b>${eur(s.invoiced)}</b></div><div class="stat">Offene Projekte<b>${s.open}</b></div><div class="stat">Abgeschlossene Projekte<b>${s.closed}</b></div></div>
- <div class="panel" style="margin:14px 0"><h3>Zahlungseingänge im aktuellen Jahr</h3><div id="customer-payments-${esc(cid)}">Zahlungen werden geladen …</div></div>
+ <div class="panel" style="margin:14px 0"><h3>Einnahmen ohne Rechnungsbeleg · brutto</h3><div id="customer-unbilled-${esc(cid)}">Buchungen werden geladen …</div></div>\n <div class="panel" style="margin:14px 0"><h3>Zahlungseingänge im aktuellen Jahr</h3><div id="customer-payments-${esc(cid)}">Zahlungen werden geladen …</div></div>
  <div class="panel" style="margin:14px 0"><h3>Rentabilitätsplanung · aktuelles Jahr</h3><div id="customer-plan-${esc(cid)}">Planungen werden geladen …</div></div><h3>Projekte des Kunden</h3><div class="tablewrap"><table><thead><tr><th>Nummer</th><th>Projekt</th><th>Phase</th><th></th></tr></thead><tbody>${s.ps.map(p=>`<tr class="clickable" onclick="projectDetail('${p.id}')"><td>${esc(p.number||'–')}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.phase||'–')}</td><td><button class="link" onclick="event.stopPropagation();projectDetail('${p.id}')">Öffnen →</button></td></tr>`).join('')}</tbody></table>${s.ps.length?'':'<div class="empty">Keine Projekte vorhanden</div>'}</div>
- <div class="foot"><button class="secondary" onclick="customerForm('${cid}')">Kunde bearbeiten</button><button onclick="closeModal()">Schließen</button></div>`);void lgCustomerPayments(cid);void lgCustomerPlans(cid);
+ <div class="foot"><button class="secondary" onclick="customerForm('${cid}')">Kunde bearbeiten</button><button onclick="closeModal()">Schließen</button></div>`);void lgCustomerPayments(cid);void lgCustomerUnbilled(cid);void lgCustomerPlans(cid);
 }
 window.addEventListener('message',async event=>{
  if(event.origin!==location.origin||event.data?.type!=='lg-customer-created'||!cloudClient||!cloudReady)return;
@@ -44,6 +44,20 @@ window.addEventListener('message',async event=>{
  }catch(e){console.warn('Kundenabgleich:',e)}
 });
 async function lgCustomerPlans(cid){const el=document.getElementById('customer-plan-'+cid);if(!el||!cloudClient)return;try{const name=cust(cid)?.name;const yr=String(new Date().getFullYear());const {data,error}=await cloudClient.from('fin_profit_plans').select('customer,project,expected_date,revenue,costs,status').eq('customer',name);if(error)throw error;const ps=(data||[]).filter(p=>String(p.expected_date||'').startsWith(yr)&&!['deleted','cancelled'].includes(p.status));const revenue=ps.reduce((s,p)=>s+Number(p.revenue||0),0),costs=ps.reduce((s,p)=>s+Number(p.costs||0),0);el.innerHTML=`<p>Geplanter Umsatz: <b>${eur(revenue)}</b> · Geplante Projektkosten: <b>${eur(costs)}</b> · Deckungsbeitrag: <b>${eur(revenue-costs)}</b></p><table><thead><tr><th>Projekt</th><th>Erwartet</th><th>Umsatz</th><th>Kosten</th></tr></thead><tbody>${ps.map(p=>`<tr><td>${esc(p.project)}</td><td>${esc(p.expected_date)}</td><td>${eur(p.revenue)}</td><td>${eur(p.costs)}</td></tr>`).join('')}</tbody></table>`}catch(e){el.textContent='Planungen konnten nicht geladen werden: '+e.message}}
+async function lgCustomerUnbilled(cid){
+ const el=document.getElementById('customer-unbilled-'+cid);if(!el||!cloudClient)return;
+ try{
+  const yr=String(new Date().getFullYear());
+  const {data,error}=await cloudClient.from('fin_entries').select('id,name,invoice_no,amount,status,due_date').eq('customer_id',cid).eq('kind','income');
+  if(error)throw error;
+  const rows=(data||[]).filter(e=>!['deleted','cancelled'].includes(e.status)&&!String(e.invoice_no||'').trim()&&String(e.due_date||'').startsWith(yr));
+  const ids=rows.map(x=>x.id),payments=[];
+  for(let i=0;i<ids.length;i+=100){const r=await cloudClient.from('fin_entry_payments').select('entry_id,amount').in('entry_id',ids.slice(i,i+100));if(r.error)throw r.error;payments.push(...(r.data||[]))}
+  const paid=new Map();for(const x of payments)paid.set(x.entry_id,(paid.get(x.entry_id)||0)+Number(x.amount||0));
+  const total=rows.reduce((a,x)=>a+Number(x.amount||0),0);
+  el.innerHTML=`<p><b>${eur(total)}</b> ohne Beleg erfasst (${rows.length} Buchung(en)). Offene Buchungen gelten nicht als bezahlt.</p><div class="tablewrap"><table><thead><tr><th>Fälligkeit</th><th>Buchung</th><th>Brutto</th><th>Bezahlt</th><th>Offen</th><th>Beleg</th></tr></thead><tbody>${rows.map(e=>{const amount=Number(e.amount||0),p=Math.min(amount,paid.get(e.id)??(e.status==='paid'?amount:0));return `<tr><td>${esc(e.due_date)}</td><td>${esc(e.name)}</td><td>${eur(amount)}</td><td>${eur(p)}</td><td>${eur(Math.max(0,amount-p))}</td><td>Beleg fehlt</td></tr>`}).join('')}</tbody></table></div>`;
+ }catch(e){el.textContent='Buchungen ohne Beleg konnten nicht geladen werden: '+e.message}
+}
 async function lgCustomerPayments(cid){
  const el=document.getElementById('customer-payments-'+cid);if(!el||!cloudClient)return;
  try{
