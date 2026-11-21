@@ -46,6 +46,14 @@ const LGStudio=(()=>{
  #app .as-position th{background:#bcbcbc!important;color:#111!important;font-size:11px!important}
  #app .as-position td{border:0!important;border-bottom:1px solid #dedede!important}
  @media(max-width:850px){#app .as-canvas{padding:90px 25px 90px 30px!important}#app .as-protected{position:static!important;width:auto!important;text-align:right!important}}
+ #app .as-free-table{border-collapse:collapse;width:100%;margin:12px 0 22px;font-size:12px}
+ #app .as-free-table th{background:#bdbfc0!important;color:#111!important;font-weight:700;padding:9px;border:1px solid #b6b6b6}
+ #app .as-free-table td{padding:9px;border:1px solid #b6b6b6;min-width:35px}
+ #app .as-free-controls{display:flex;gap:6px;justify-content:flex-end;margin-top:16px}
+ #app .as-free-controls button{font-size:11px;padding:5px}
+ #app .as-position thead th span[contenteditable=true]{display:block;min-width:35px;outline:1px dashed #777;padding:3px}
+ #app .as-position{table-layout:auto}
+ #app .as-canvas .as-money{font-size:13px}
  #app .as-external-card{max-width:1000px;margin:auto;padding:26px;border-radius:14px}#app .as-external-card input,#app .as-external-card textarea{width:100%;margin-top:6px}#app .as-external-card label{display:block;font-size:13px;font-weight:600}#app .as-number{font-size:25px;font-weight:800;letter-spacing:.05em;padding:16px 20px;border:1px solid #70819a;border-radius:10px;display:inline-block;margin:8px 0 16px}#app .as-message{font-size:13px;color:#5a6472;margin-top:10px}#app .as-money{text-align:right;margin-top:12px;font-weight:bold}
  @media(max-width:700px){#app .as-canvas{padding:20px;min-height:650px}#app .as-meta{grid-template-columns:1fr}#app .as-lock img{max-width:100px}}
  @media print{#app .as-tools,#app .as-actions,#app .as-meta,#app .as-message{display:none!important}}
@@ -65,7 +73,8 @@ const LGStudio=(()=>{
   if(choice===null)return;
   const c=state.customers[Number(choice)-1];
   if(!c)return alert('Bitte eine gültige Kundennummer aus der Liste wählen.');
-  const d={id:id(),type:'Q',studio:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:'',date:today(),vat:Number(state.settings.vat??19),lines:[{id:id(),sku:'',description:'Neue Position',qty:1,price:0,discount:0,percent:100}],studioTop:initial(),studioBottom:'<p>Wir freuen uns auf die Zusammenarbeit.</p>',notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:'Zahlbar sofort ohne Abzug'};
+  const projects=state.projects.filter(p=>p.customerId===c.id);const chosen=projects.length?prompt('Projekt wählen (Nummer) oder leer für kein Projekt:\\n'+projects.map((p,i)=>`${i+1}: ${p.name||p.title||p.number||p.id}`).join('\\n'),''):'';if(chosen===null)return;const projectId=chosen?projects[Number(chosen)-1]?.id:'';if(chosen&&!projectId)return alert('Ungültige Projektauswahl.');
+  const d={id:id(),type:'Q',studio:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:projectId||'',date:today(),vat:Number(state.settings.vat??19),lines:[{id:id(),sku:'',description:'Neue Position',qty:1,price:0,discount:0,percent:100}],studioTop:initial(),studioBottom:'<p>Wir freuen uns auf die Zusammenarbeit.</p>',notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:'Zahlbar sofort ohne Abzug'};
   state.docs.push(d);save();open(d.id);
  }
  function newQuote(){
@@ -76,7 +85,8 @@ const LGStudio=(()=>{
  }
  function internal(){
   const c=cust(selectedCustomer);if(!c)return alert('Kunden auswählen.');
-  const d={id:id(),type:'Q',studio:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:'',date:today(),vat:Number(state.settings.vat??19),lines:[{id:id(),sku:'',description:'',qty:1,price:0,discount:0,percent:100}],studioTop:'<p><br></p>',studioBottom:'<p><br></p>',notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:'Zahlbar sofort ohne Abzug'};
+  const projects=state.projects.filter(p=>p.customerId===c.id);const chosen=projects.length?prompt('Projekt wählen (Nummer) oder leer für kein Projekt:\\n'+projects.map((p,i)=>`${i+1}: ${p.name||p.title||p.number||p.id}`).join('\\n'),''):'';if(chosen===null)return;const projectId=chosen?projects[Number(chosen)-1]?.id:'';if(chosen&&!projectId)return alert('Ungültige Projektauswahl.');
+  const d={id:id(),type:'Q',studio:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:projectId||'',date:today(),vat:Number(state.settings.vat??19),lines:[{id:id(),sku:'',description:'',qty:1,price:0,discount:0,percent:100}],studioTop:'<p><br></p>',studioBottom:'<p><br></p>',studioFreeTables:[],studioCalcHeadings:['Pos.','Leistungsbeschreibung','Menge','Einzelpreis netto','Rabatt %','Kosten'],notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:'Zahlbar sofort ohne Abzug'};
   state.docs.push(d);save();open(d.id);
  }
  function external(){
@@ -105,7 +115,7 @@ const LGStudio=(()=>{
    if(!Number.isFinite(net)||net<0||!Number.isFinite(vat)||vat<0||vat>100)return alert('Bitte Beträge prüfen.');
    if(!cloudReady||lgBlocked)return alert('Supabase ist nicht bereit.');
    const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='Nummer wird vergeben …';
-   const d={id:id(),type:'Q',studio:true,external:true,externalPendingPdf:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:'',date:String(fd.get('date')),vat,externalNet:net,externalGross:Math.round(net*(1+vat/100)*100)/100,externalTitle:String(fd.get('title')).trim(),externalReference:String(fd.get('reference')).trim(),externalValidUntil:String(fd.get('validUntil')),externalDelivery:String(fd.get('delivery')).trim(),payment:String(fd.get('payment')).trim(),notes:String(fd.get('notes')).trim(),lines:[]};
+   const d={id:id(),type:'Q',studio:true,external:true,externalPendingPdf:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:'',date:String(fd.get('date')),vat,externalNet:net,externalGross:Math.round(net*(1+vat/100)*100)/100,externalTitle:String(fd.get('title')).trim(),externalReference:String(fd.get('reference')).trim(),externalValidUntil:String(fd.get('validUntil')),externalDelivery:String(fd.get('delivery')).trim(),payment:String(fd.get('payment')).trim(),notes:String(fd.get('notes')).trim(),lines:[{id:id(),description:'Externes Angebot – Gesamtbetrag',qty:1,price:net,discount:0,percent:100}]};
    state.docs.push(d);save();
    try{
     await Promise.race([lgWaitForSavedDoc(d.id),new Promise((_,reject)=>setTimeout(()=>reject(Error('Speicherung nach 15 Sekunden nicht bestätigt.')),15000))]);
@@ -125,6 +135,7 @@ const LGStudio=(()=>{
  async function releaseExternal(did){const d=doc(did);if(!d?.external)return;open(did)}
  async function retryNumber(did){
   const d=doc(did);if(!d?.external)return;
+  if(!d.lines?.length){d.lines=[{id:id(),description:'Externes Angebot – Gesamtbetrag',qty:1,price:Number(d.externalNet||0),discount:0,percent:100}];save();}
   if(d.number)return open(did);
   try{
    await Promise.race([lgWaitForSavedDoc(did),new Promise((_,r)=>setTimeout(()=>r(Error('Speicherung dauert zu lange')),15000))]);
@@ -158,6 +169,17 @@ const LGStudio=(()=>{
   catch(e){state.docs.splice(i,0,d);alert('Löschen nicht bestätigt: '+e.message)}
  }
  function manualDoc(did,type){const d=doc(did);if(!locked(d))return;const x={id:id(),type,number:'',approvalState:'draft',status:'Entwurf',customerId:d.customerId,date:today(),vat:d.vat,sourceId:d.id,lines:[{id:id(),description:'',qty:1,price:0,discount:0,percent:100}]};state.docs.push(x);save();window.LGPlatform.open(type==='I'?'Rechnungen & Gutschriften':'Auftragsbestätigungen');documentForm(x.id,type)}
+ function calcHeaders(d,ro){
+  const heads=d.studioCalcHeadings||['Pos.','Leistungsbeschreibung','Menge','Einzelpreis netto','Rabatt %','Kosten'];
+  return heads.map((h,i)=>`<th ${i===0?'style="width:8%"':''}><span ${ro?'':'contenteditable="true"'} data-head="${i}">${escape(h)}</span></th>`).join('')+ '<th class="as-edit-only"></th>';
+ }
+ function freeTables(d,ro){
+  return (d.studioFreeTables||[]).map((t,i)=>`<section class="as-free-block" data-free="${i}"><div class="as-free-controls as-edit-only">${ro?'':`<button onclick="LGStudio.freeRow(${i})">+ Zeile</button><button onclick="LGStudio.freeCol(${i})">+ Spalte</button><button onclick="LGStudio.freeRemove(${i})">Tabelle entfernen</button>`}</div><table class="as-free-table"><tbody>${(t.cells||[]).map((row,r)=>`<tr>${row.map((cell,c)=>`<${r===0?'th':'td'} contenteditable="${!ro}" data-r="${r}" data-c="${c}">${escape(cell)}</${r===0?'th':'td'}>`).join('')}</tr>`).join('')}</tbody></table></section>`).join('');
+ }
+ function freeAdd(){const d=collect();d.studioFreeTables=d.studioFreeTables||[];d.studioFreeTables.push({cells:[['Spalte 1','Spalte 2'],['','']]});open(d.id);dirty=true}
+ function freeRow(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;t.cells.push(Array(t.cells[0].length).fill(''));open(d.id);dirty=true}
+ function freeCol(i){const d=collect(),t=d.studioFreeTables[i];if(!t)return;t.cells.forEach(r=>r.push(''));open(d.id);dirty=true}
+ function freeRemove(i){if(!confirm('Freie Tabelle entfernen?'))return;const d=collect();d.studioFreeTables.splice(i,1);open(d.id);dirty=true}
  function lineRows(d,readonly){
   return (d.lines||[]).map((l,i)=>`<tr data-line="${i}"><td>${i+1}</td><td><input aria-label="Beschreibung" data-key="description" value="${escape(l.description)}" ${readonly?'disabled':''}></td><td><input aria-label="Menge" type="number" min="0" step="0.01" data-key="qty" value="${Number(l.qty||0)}" ${readonly?'disabled':''}></td><td><input aria-label="Einzelpreis" type="number" min="0" step="0.01" data-key="price" value="${Number(l.price||0)}" ${readonly?'disabled':''}></td><td><input aria-label="Rabatt" type="number" min="0" max="100" step="0.01" data-key="discount" value="${Number(l.discount||0)}" ${readonly?'disabled':''}></td><td>${eur(Number(l.qty||0)*Number(l.price||0)*(1-Number(l.discount||0)/100))}</td><td>${readonly?'':`<button class="danger" onclick="LGStudio.removeLine(${i})">×</button>`}</td></tr>`).join('');
  }
@@ -170,16 +192,16 @@ const LGStudio=(()=>{
   <div class="as-meta"><div><label>Dokumentdatum</label><input id="as-date" type="date" value="${escape(d.date)}" ${ro?'disabled':''}></div><div><label>Mehrwertsteuer (%)</label><input id="as-vat" type="number" min="0" max="100" value="${Number(d.vat??19)}" ${ro?'disabled':''}></div><div><label>Dokumentnummer</label><input value="${escape(d.number||'Wird bei Freigabe vergeben')}" disabled></div></div>
   <div class="as-editor-layout"><div class="as-editor-document">
   <div id="as-paper" class="as-canvas"><div class="as-lock"><div class="as-address">${escape(c.name)}\n${escape(c.address||'Keine Rechnungsadresse hinterlegt')}</div><img alt="Die Lichtgestalter Logo" src="${LOGO}"></div>
-  <h2>${d.type==='Q'?'Angebot':'Auftragsbestätigung'} Nr. ${escape(d.number||'Entwurf')}</h2><p style="text-align:right">Datum: ${escape(d.date)}</p>
+  <h2>${d.type==='Q'?'Angebot':'Auftragsbestätigung'} Nr. ${escape(d.number||'Entwurf')}</h2><p><b>Projekt Nr. ${escape(proj(d.projectId)?.number||proj(d.projectId)?.projectNumber||'—')}</b></p><p style="text-align:right">Datum: ${escape(d.date)}</p>
   <div id="as-top" class="as-body" contenteditable="${!ro}" spellcheck="true">${cleanHtml(d.studioTop||initial())}</div>
-  <h3>Positionen</h3><table class="as-position"><thead><tr><th>Pos.</th><th>Beschreibung</th><th>Menge</th><th>Einzelpreis netto</th><th>Rabatt %</th><th>Gesamt netto</th><th></th></tr></thead><tbody id="as-lines">${lineRows(d,ro)}</tbody></table>
+  <h3>Positionen</h3><table class="as-position"><thead><tr>${calcHeaders(d,ro)}</tr></thead><tbody id="as-lines">${lineRows(d,ro)}</tbody></table>
   <div class="as-money">Netto: <span id="as-total">${eur(amount(d))}</span></div>
-  <div id="as-bottom" class="as-body" contenteditable="${!ro}" spellcheck="true">${cleanHtml(d.studioBottom||'<p><br></p>')}</div>
+  <div id="as-free-tables">${freeTables(d,ro)}</div><div id="as-bottom" class="as-body" contenteditable="${!ro}" spellcheck="true">${cleanHtml(d.studioBottom||'<p><br></p>')}</div>
   <div class="as-protected">${escape(state.settings.company||'Die Lichtgestalter')}<br>${escape(state.settings.address||'')}<br>${escape(state.settings.email||'')}</div></div></div>
-  ${!ro?`<div class="as-tools"><button onclick="LGStudio.format('bold')"><b>Fett</b></button><button onclick="LGStudio.format('italic')"><i>Kursiv</i></button><button onclick="LGStudio.format('underline')"><u>Unterstrichen</u></button><button onclick="LGStudio.format('insertUnorderedList')">Liste</button><button onclick="LGStudio.heading()">Überschrift</button><button onclick="LGStudio.table()">+ Zusatztabelle</button><button onclick="LGStudio.image()">+ Bild</button><button onclick="LGStudio.line()">+ Position</button></div>`:''}
+  ${!ro?`<div class="as-tools"><button onclick="LGStudio.format('bold')"><b>Fett</b></button><button onclick="LGStudio.format('italic')"><i>Kursiv</i></button><button onclick="LGStudio.format('underline')"><u>Unterstrichen</u></button><button onclick="LGStudio.format('insertUnorderedList')">Liste</button><button onclick="LGStudio.heading()">Überschrift</button><button onclick="LGStudio.table()">+ Zusatztabelle</button><button onclick="LGStudio.image()">+ Bild</button><button onclick="LGStudio.line()">+ Kalkulationsposition</button><button onclick="LGStudio.freeAdd()">+ Freie Tabelle</button></div>`:''}
 </div></div></section>`;
   if(!ro){
-   for(const e of app.querySelectorAll('#as-top,#as-bottom,#as-lines,#as-date,#as-vat'))e.addEventListener('input',()=>{dirty=true;updateTotals()});
+   for(const e of app.querySelectorAll('#as-top,#as-bottom,#as-lines,#as-date,#as-vat,#as-free-tables,.as-position thead'))e.addEventListener('input',()=>{dirty=true;updateTotals()});
   }
  }
  function updateTotals(){
@@ -191,7 +213,9 @@ const LGStudio=(()=>{
   const lines=[...document.querySelectorAll('#as-lines tr')].map((tr,i)=>{const v=k=>tr.querySelector(`[data-key="${k}"]`)?.value;return {id:d.lines?.[i]?.id||id(),sku:'',description:v('description')||'',qty:Number(v('qty')),price:Number(v('price')),discount:Number(v('discount')),percent:100}});
   if(!lines.length)throw Error('Mindestens eine Position erforderlich.');
   if(lines.some(x=>!Number.isFinite(x.qty)||!Number.isFinite(x.price)||x.qty<0||x.price<0||x.discount<0||x.discount>100))throw Error('Mengen, Preise oder Rabatte sind ungültig.');
-  Object.assign(d,{studioTop:cleanHtml(document.getElementById('as-top').innerHTML),studioBottom:cleanHtml(document.getElementById('as-bottom').innerHTML),date:document.getElementById('as-date').value,vat:Number(document.getElementById('as-vat').value),lines});
+  const heads=[...document.querySelectorAll('[data-head]')].map(e=>e.textContent.trim());
+  const free=[...document.querySelectorAll('[data-free]')].map(block=>({cells:[...block.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(cell=>cell.textContent))}));
+  Object.assign(d,{studioCalcHeadings:heads,studioFreeTables:free,studioTop:cleanHtml(document.getElementById('as-top').innerHTML),studioBottom:cleanHtml(document.getElementById('as-bottom').innerHTML),date:document.getElementById('as-date').value,vat:Number(document.getElementById('as-vat').value),lines});
   return d;
  }
  async function saveDraft(){
@@ -238,5 +262,5 @@ const LGStudio=(()=>{
   try{await html2pdf().set({margin:8,filename:(d.number||'Angebotsentwurf')+'.pdf',image:{type:'jpeg',quality:.97},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(clone).save()}
   catch(e){alert('PDF-Erstellung fehlgeschlagen: '+e.message)}finally{host.remove()}
  }
- return {page,retryNumber,newQuote,internal,external,deleteDraft,downloadExternal,replaceExternal,releaseExternal,manualDoc,open,saveDraft,release,back,format,heading,table,image,line,removeLine,order,invoice,exportPdf};
+ return {page,retryNumber,newQuote,freeAdd,freeRow,freeCol,freeRemove,internal,external,deleteDraft,downloadExternal,replaceExternal,releaseExternal,manualDoc,open,saveDraft,release,back,format,heading,table,image,line,removeLine,order,invoice,exportPdf};
 })();
