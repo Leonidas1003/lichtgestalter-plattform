@@ -31,8 +31,33 @@ function customerDetail(cid){
  const s=customerStats(cid);
  modal('Kunde · '+esc(c.name),`<div class="grid2"><div><label>Kundennummer</label><b>${esc(c.number||'–')}</b></div><div><label>Firma / Name</label><b>${esc(c.name)}</b></div><div><label>Ansprechpartner</label><span>${esc(c.contact||'–')}</span></div><div><label>E-Mail</label><span>${esc(c.email||'–')}</span></div></div>
  <div class="stats" style="margin:20px 0"><div class="stat">Angeboten netto<b>${eur(s.offered)}</b></div><div class="stat">Berechnet netto<b>${eur(s.invoiced)}</b></div><div class="stat">Offene Projekte<b>${s.open}</b></div><div class="stat">Abgeschlossene Projekte<b>${s.closed}</b></div></div>
+ <div class="panel" style="margin:14px 0"><h3>Zahlungseingänge im aktuellen Jahr</h3><div id="customer-payments-${esc(cid)}">Zahlungen werden geladen …</div></div>
  <h3>Projekte des Kunden</h3><div class="tablewrap"><table><thead><tr><th>Nummer</th><th>Projekt</th><th>Phase</th><th></th></tr></thead><tbody>${s.ps.map(p=>`<tr class="clickable" onclick="projectDetail('${p.id}')"><td>${esc(p.number||'–')}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.phase||'–')}</td><td><button class="link" onclick="event.stopPropagation();projectDetail('${p.id}')">Öffnen →</button></td></tr>`).join('')}</tbody></table>${s.ps.length?'':'<div class="empty">Keine Projekte vorhanden</div>'}</div>
- <div class="foot"><button class="secondary" onclick="customerForm('${cid}')">Kunde bearbeiten</button><button onclick="closeModal()">Schließen</button></div>`);
+ <div class="foot"><button class="secondary" onclick="customerForm('${cid}')">Kunde bearbeiten</button><button onclick="closeModal()">Schließen</button></div>`);void lgCustomerPayments(cid);
+}
+window.addEventListener('message',async event=>{
+ if(event.origin!==location.origin||event.data?.type!=='lg-customer-created'||!cloudClient||!cloudReady)return;
+ try{
+  const {data,error}=await cloudClient.from('lg_records').select('kind,id,data,version').eq('kind','customers');if(error)throw error;
+  for(const row of data||[]){if(!state.customers.some(c=>c.id===row.id))state.customers.push(row.data);if(typeof lgBaseline!=='undefined')lgBaseline.customers[row.id]={version:row.version,data:row.data};}
+  if(view==='Kunden')render();
+ }catch(e){console.warn('Kundenabgleich:',e)}
+});
+async function lgCustomerPayments(cid){
+ const el=document.getElementById('customer-payments-'+cid);if(!el||!cloudClient)return;
+ try{
+  const {data:es,error}=await cloudClient.from('fin_entries').select('id,name,invoice_no,amount,status,paid_date,due_date').eq('customer_id',cid).eq('kind','income').neq('status','deleted');if(error)throw error;
+  const ids=(es||[]).map(e=>e.id);let pays=[];
+  if(ids.length){for(let i=0;i<ids.length;i+=100){const r=await cloudClient.from('fin_entry_payments').select('entry_id,amount,paid_date').in('entry_id',ids.slice(i,i+100));if(r.error)throw r.error;pays.push(...(r.data||[]))}}
+  const by=new Map();for(const x of pays){const a=by.get(x.entry_id)||[];a.push(x);by.set(x.entry_id,a)}
+  const yr=String(new Date().getFullYear()),rows=[];
+  for(const e of es||[]){const ps=by.get(e.id)||[];if(ps.length){for(const x of ps)if(String(x.paid_date||'').startsWith(yr))rows.push({...x,entry:e})}
+   else if(e.status==='paid'&&String(e.paid_date||'').startsWith(yr))rows.push({entry:e,amount:e.amount,paid_date:e.paid_date});}
+  rows.sort((a,b)=>String(b.paid_date).localeCompare(String(a.paid_date)));
+  const total=rows.reduce((a,r)=>a+Number(r.amount||0),0);
+  if(!document.getElementById('customer-payments-'+cid))return;
+  el.innerHTML=`<button class="secondary" onclick="document.getElementById('customer-payment-list-${esc(cid)}').hidden=!document.getElementById('customer-payment-list-${esc(cid)}').hidden">${eur(total)} bezahlt ${yr} · ${rows.length} Zahlung(en) – Details anzeigen</button><div id="customer-payment-list-${esc(cid)}" hidden class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Datum</th><th>Buchung</th><th>Beleg</th><th>Betrag</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.paid_date)}</td><td>${esc(r.entry.name)}</td><td>${esc(r.entry.invoice_no)}</td><td>${eur(Number(r.amount))}</td></tr>`).join('')}</tbody></table></div>`;
+ }catch(e){el.textContent='Zahlungen konnten nicht geladen werden: '+e.message}
 }
 function customersPage(){return `<div class="toolbar"><h2>Kunden</h2><button onclick="customerForm()">+ Neuer Kunde</button></div><div class="panel tablewrap"><table><thead><tr><th>Nummer / Firma / Namen</th><th>Angeboten netto</th><th>Berechnet netto</th><th>Projekte offen</th><th>Abgeschlossen</th><th></th></tr></thead><tbody>${state.customers.map(c=>{const s=customerStats(c.id);return `<tr class="clickable" onclick="customerDetail('${c.id}')"><td><b>${esc([c.number,c.name].filter(Boolean).join(' / '))}</b></td><td>${eur(s.offered)}</td><td>${eur(s.invoiced)}</td><td>${s.open}</td><td>${s.closed}</td><td><button class="secondary" onclick="event.stopPropagation();customerDetail('${c.id}')">Öffnen</button></td></tr>`}).join('')}</tbody></table>${state.customers.length?'':'<div class="empty">Noch keine Kunden angelegt</div>'}</div>`}
 function docsPage(type){let ds=state.docs.filter(d=>type==='I'?['I','G'].includes(d.type):d.type===type).sort((a,b)=>(b.date||'').localeCompare(a.date||''));return `<div class="toolbar"><h2>${type==='I'?'Rechnungen & Gutschriften':types[type]}</h2><button onclick="documentForm(null,'${type}')">+ ${type==='I'?'Neue Rechnung':'Neues Dokument'}</button></div><div class="panel tablewrap"><table><thead><tr><th>Belegart</th><th>Nummer</th><th>Datum</th><th>Kunde</th><th>Projekt</th><th>Netto</th><th>Brutto</th><th>Status</th><th>Aktionen</th></tr></thead><tbody>${ds.map(d=>`<tr><td>${esc(types[d.type]||d.type)}</td><td><b>${esc(docDisplayNumber(d))}</b></td><td>${esc(d.date)}</td><td>${esc(cust(d.customerId)?.name)}</td><td>${esc(proj(d.projectId)?.name)}</td><td>${eur(amount(d))}</td><td>${eur(amount(d)*(1+Number(d.vat??19)/100))}</td><td><span class="pill ${d.status==='Bezahlt'||d.status==='Bestätigt'?'green':d.status==='Offen'||d.status==='Überfällig'?'red':'orange'}">${esc(docApproval(d)==='draft'?'Entwurf':(d.status==='Entwurf'?'Freigegeben':d.status))}</span></td><td><button class="link" onclick="lgShowDocPreview('${d.id}')">Ansehen</button>${canEditDoc(d)?`<button class="link" onclick="documentForm('${d.id}')">Bearbeiten</button>`:''}${docActions(d)}<button class="link" onclick="downloadDoc('${d.id}')">PDF herunterladen</button>${canEditDoc(d)?`<button class="link" style="color:#b42332" onclick="deleteDocument('${d.id}')">Löschen</button>`:''}</td></tr>`).join('')}</tbody></table>${ds.length?'':'<div class="empty">Noch keine Dokumente vorhanden</div>'}</div>`}
