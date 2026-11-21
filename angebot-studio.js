@@ -85,8 +85,32 @@ const LGStudio=(()=>{
  }
  function internal(){
   const c=cust(selectedCustomer);if(!c)return alert('Kunden auswählen.');
-  const projects=state.projects.filter(p=>p.customerId===c.id);const chosen=projects.length?prompt('Projekt wählen (Nummer) oder leer für kein Projekt:\\n'+projects.map((p,i)=>`${i+1}: ${p.name||p.title||p.number||p.id}`).join('\\n'),''):'';if(chosen===null)return;const projectId=chosen?projects[Number(chosen)-1]?.id:'';if(chosen&&!projectId)return alert('Ungültige Projektauswahl.');
-  const d={id:id(),type:'Q',studio:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:projectId||'',date:today(),vat:Number(state.settings.vat??19),lines:[{id:id(),sku:'',description:'',qty:1,price:0,discount:0,percent:100}],studioTop:'<p><br></p>',studioBottom:'<p><br></p>',studioFreeTables:[],studioCalcHeadings:['Pos.','Leistungsbeschreibung','Menge','Einzelpreis netto','Rabatt %','Kosten'],notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:'Zahlbar sofort ohne Abzug'};
+  const projects=state.projects.filter(p=>p.customerId===c.id);
+  document.getElementById('app').innerHTML=`<section class="as-shell"><div class="as-head"><div><h2>Projekt für das Angebot wählen</h2><p class="muted">Kunde: ${escape(c.name)}</p></div><button class="secondary" onclick="LGStudio.newQuote()">← Zurück</button></div>
+  <div class="panel as-external-card"><h3>Bestehendes Projekt auswählen</h3>
+  ${projects.length?`<div style="display:grid;gap:10px">${projects.map(p=>`<button class="secondary" style="text-align:left;padding:18px" onclick="LGStudio.startInternal('${p.id}')"><b>${escape(p.number||'Ohne Projektnummer')}</b> · ${escape(p.name||'Unbenanntes Projekt')}</button>`).join('')}</div>`:'<p>Für diesen Kunden ist noch kein Projekt angelegt.</p>'}
+  <hr><h3>Neues Projekt anlegen</h3><form id="as-new-project"><div class="as-meta"><label>Projektname *<input name="name" required placeholder="z. B. Lichtplanung Empfang"></label><label>Projektnummer<input name="number" placeholder="Projektnummer gemäß eurem Nummernkreis"></label></div><button type="submit">Projekt anlegen und Angebot öffnen</button></form></div></section>`;
+  document.getElementById('as-new-project').onsubmit=async e=>{
+   e.preventDefault();const form=e.currentTarget,fd=new FormData(form),name=String(fd.get('name')||'').trim(),number=String(fd.get('number')||'').trim();
+   if(!name)return alert('Projektname fehlt.');
+   if(number&&state.projects.some(p=>p.number===number))return alert('Diese Projektnummer existiert bereits.');
+   const p={id:id(),name,number,customerId:c.id,phase:typeof phases!=='undefined'?phases[0]:'Angebotsphase',notes:''};
+   state.projects.push(p);save();
+   try{await Promise.race([lgWaitForSavedProject(p.id),new Promise((_,reject)=>setTimeout(()=>reject(Error('Speicherung nach 15 Sekunden nicht bestätigt.')),15000))]);LGStudio.startInternal(p.id)}
+   catch(err){alert('Projekt konnte nicht bestätigt werden: '+err.message+' – bitte in der Projektübersicht prüfen.')}
+  };
+ }
+ async function lgWaitForSavedProject(pid){
+  if(!cloudReady||lgBlocked)throw Error('Supabase nicht bereit.');
+  while(lgBusy)await new Promise(r=>setTimeout(r,75));
+  await lgFlush();
+  while(lgBusy)await new Promise(r=>setTimeout(r,75));
+  if(lgBlocked||!lgBaseline.projects[pid])throw Error('Projekt nicht in Supabase bestätigt.');
+ }
+ function startInternal(projectId){
+  const c=cust(selectedCustomer),p=proj(projectId);
+  if(!c||!p||p.customerId!==c.id)return alert('Projekt gehört nicht zum ausgewählten Kunden.');
+  const d={id:id(),type:'Q',studio:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:p.id,date:today(),vat:Number(state.settings.vat??19),lines:[{id:id(),sku:'',description:'',qty:1,price:0,discount:0,percent:100}],studioTop:'<p><br></p>',studioBottom:'<p><br></p>',studioFreeTables:[],studioCalcHeadings:['Pos.','Leistungsbeschreibung','Menge','Einzelpreis netto','Rabatt %','Kosten'],notes:'',introText:'',outroText:'',deliveryTerm:'',serviceDate:'',payment:'Zahlbar sofort ohne Abzug'};
   state.docs.push(d);save();open(d.id);
  }
  function external(){
@@ -120,7 +144,7 @@ const LGStudio=(()=>{
    try{
     await Promise.race([lgWaitForSavedDoc(d.id),new Promise((_,reject)=>setTimeout(()=>reject(Error('Speicherung nach 15 Sekunden nicht bestätigt.')),15000))]);
     const {data:released,error}=await cloudClient.rpc('lg_release_document',{p_doc_id:d.id});
-    if(error)throw Error('Nummernvergabe: '+error.message);
+    if(error)throw Error('Nummernvergabe in Supabase abgelehnt: '+error.message);
     await lgLoad();
     const saved=doc(d.id),number=String(saved?.number||released?.number||'').trim();
     if(!number)throw Error('Keine Angebotsnummer bestätigt. Bitte die Übersicht prüfen.');
