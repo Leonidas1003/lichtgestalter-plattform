@@ -37,6 +37,15 @@ const LGStudio=(()=>{
  #app .as-protected{margin-top:38px;text-align:right;font-size:11px;color:#5b6573;border-top:1px solid #ddd;padding-top:16px}
  #app .as-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}#app .as-meta label{font-size:12px}
  #app .as-meta input,#app .as-meta select{width:100%}#app .as-list{width:100%}#app .as-list td{padding:13px}
+ #app .as-canvas{position:relative!important;background:#fff!important;color:#171717!important;font-family:Arial,Helvetica,sans-serif!important;max-width:860px!important;padding:100px 190px 85px 62px!important;min-height:1120px!important;font-size:12px!important;line-height:1.45!important}
+ #app .as-lock{min-height:180px!important;display:block!important;border:0!important;padding:0!important;margin-bottom:16px!important}
+ #app .as-lock img{position:absolute;right:24px;top:28px;max-width:170px!important;max-height:70px!important}
+ #app .as-address{font-size:12px!important;white-space:pre-line!important;padding-top:45px!important}
+ #app .as-canvas>h2{font-size:15px!important;font-style:italic;font-weight:800!important;margin-top:15px!important}
+ #app .as-protected{position:absolute!important;right:20px!important;top:640px!important;width:135px!important;text-align:right!important;border:0!important;font-size:9px!important;line-height:1.5!important;color:#777!important}
+ #app .as-position th{background:#bcbcbc!important;color:#111!important;font-size:11px!important}
+ #app .as-position td{border:0!important;border-bottom:1px solid #dedede!important}
+ @media(max-width:850px){#app .as-canvas{padding:90px 25px 90px 30px!important}#app .as-protected{position:static!important;width:auto!important;text-align:right!important}}
  #app .as-external-card{max-width:1000px;margin:auto;padding:26px;border-radius:14px}#app .as-external-card input,#app .as-external-card textarea{width:100%;margin-top:6px}#app .as-external-card label{display:block;font-size:13px;font-weight:600}#app .as-number{font-size:25px;font-weight:800;letter-spacing:.05em;padding:16px 20px;border:1px solid #70819a;border-radius:10px;display:inline-block;margin:8px 0 16px}#app .as-message{font-size:13px;color:#5a6472;margin-top:10px}#app .as-money{text-align:right;margin-top:12px;font-weight:bold}
  @media(max-width:700px){#app .as-canvas{padding:20px;min-height:650px}#app .as-meta{grid-template-columns:1fr}#app .as-lock img{max-width:100px}}
  @media print{#app .as-tools,#app .as-actions,#app .as-meta,#app .as-message{display:none!important}}
@@ -99,11 +108,13 @@ const LGStudio=(()=>{
    const d={id:id(),type:'Q',studio:true,external:true,externalPendingPdf:true,number:'',approvalState:'draft',status:'Entwurf',customerId:c.id,projectId:'',date:String(fd.get('date')),vat,externalNet:net,externalGross:Math.round(net*(1+vat/100)*100)/100,externalTitle:String(fd.get('title')).trim(),externalReference:String(fd.get('reference')).trim(),externalValidUntil:String(fd.get('validUntil')),externalDelivery:String(fd.get('delivery')).trim(),payment:String(fd.get('payment')).trim(),notes:String(fd.get('notes')).trim(),lines:[]};
    state.docs.push(d);save();
    try{
-    await lgWaitForSavedDoc(d.id);
-    const {error}=await cloudClient.rpc('lg_release_document',{p_doc_id:d.id});
-    if(error)throw error;
+    await Promise.race([lgWaitForSavedDoc(d.id),new Promise((_,reject)=>setTimeout(()=>reject(Error('Speicherung nach 15 Sekunden nicht bestätigt.')),15000))]);
+    const {data:released,error}=await cloudClient.rpc('lg_release_document',{p_doc_id:d.id});
+    if(error)throw Error('Nummernvergabe: '+error.message);
     await lgLoad();
-    const saved=doc(d.id);if(!saved?.number)throw Error('Keine Angebotsnummer erhalten.');
+    const saved=doc(d.id),number=String(saved?.number||released?.number||'').trim();
+    if(!number)throw Error('Keine Angebotsnummer bestätigt. Bitte die Übersicht prüfen.');
+    if(saved&&!saved.number){saved.number=number;saved.approvalState='issued';save();await lgWaitForSavedDoc(d.id);}
     open(d.id);
    }catch(e){alert('Nummer konnte nicht vergeben werden: '+e.message);window.LGPlatform.open('Angebotsstudio')}
    finally{button.disabled=false;button.textContent='Angebotsnummer vergeben und fortfahren'}
@@ -112,11 +123,25 @@ const LGStudio=(()=>{
  async function downloadExternal(did){const d=doc(did);if(!d?.externalPath)return;const {data,error}=await cloudClient.storage.from('lg-offers').download(d.externalPath);if(error)return alert(error.message);const url=URL.createObjectURL(data),a=document.createElement('a');a.href=url;a.download=d.externalFileName||'Angebot.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)}
  async function replaceExternal(did){const d=doc(did);if(!d?.external)return;const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';inp.onchange=async()=>{const file=inp.files?.[0];if(!file||file.size>15e6)return alert('Maximal 15 MB');const path=d.externalPath||`${d.id}.pdf`;const {error}=await cloudClient.storage.from('lg-offers').upload(path,file,{upsert:!!d.externalPath,contentType:'application/pdf'});if(error)return alert(error.message);d.externalPath=path;d.externalFileName=file.name;d.externalPendingPdf=false;save();try{await lgWaitForSavedDoc(d.id);open(d.id)}catch(e){alert('PDF hochgeladen, aber Dokumentdaten konnten nicht bestätigt werden: '+e.message)}};inp.click()}
  async function releaseExternal(did){const d=doc(did);if(!d?.external)return;open(did)}
+ async function retryNumber(did){
+  const d=doc(did);if(!d?.external)return;
+  if(d.number)return open(did);
+  try{
+   await Promise.race([lgWaitForSavedDoc(did),new Promise((_,r)=>setTimeout(()=>r(Error('Speicherung dauert zu lange')),15000))]);
+   const {data,error}=await cloudClient.rpc('lg_release_document',{p_doc_id:did});
+   if(error)throw error;
+   await lgLoad();
+   const x=doc(did),number=String(x?.number||data?.number||'').trim();
+   if(!number)throw Error('Keine Nummer von der Datenbank bestätigt');
+   if(x&&!x.number){x.number=number;x.approvalState='issued';save();await lgWaitForSavedDoc(did)}
+   open(did);
+  }catch(e){alert('Nummernvergabe fehlgeschlagen: '+e.message)}
+ }
  function openExternal(d){
   const c=cust(d.customerId)||{},gross=Number(d.externalGross??(Number(d.externalNet)*(1+Number(d.vat)/100)));
   document.getElementById('app').innerHTML=`<section class="as-shell"><div class="as-head"><div><h2>Externes Angebot · ${escape(d.number||'Entwurf')}</h2><p class="muted">${escape(c.name)} · ${d.externalPendingPdf?'PDF noch nicht hinterlegt':'PDF hinterlegt'}</p></div><button class="secondary" onclick="LGStudio.back()">← Übersicht</button></div>
   <div class="panel as-external-card"><h3>${d.externalPendingPdf?'2 · Angebots-PDF hochladen':'Angebotsübersicht'}</h3>
-  <p>Verbindliche Angebotsnummer:</p><div class="as-number">${escape(d.number||'Nummer ausstehend')}</div>
+  <p>Verbindliche Angebotsnummer:</p><div class="as-number">${escape(d.number||'Nummer ausstehend')}</div>${!d.number?`<button onclick="LGStudio.retryNumber('${d.id}')">Nummer erneut anfordern</button>`:''}
   <p class="as-message">Diese Nummer muss auf dem extern erstellten Angebot stehen. Anschließend die endgültige PDF-Datei hochladen.</p>
   <div class="as-meta"><div><b>Bezeichnung</b><p>${escape(d.externalTitle||'—')}</p></div><div><b>Projekt</b><p>${escape(d.externalReference||'—')}</p></div><div><b>Datum</b><p>${escape(d.date||'—')}</p></div><div><b>Netto</b><p>${eur(d.externalNet)}</p></div><div><b>MwSt.</b><p>${escape(d.vat)} %</p></div><div><b>Brutto</b><p>${eur(gross)}</p></div><div><b>Gültig bis</b><p>${escape(d.externalValidUntil||'—')}</p></div><div><b>Lieferung</b><p>${escape(d.externalDelivery||'—')}</p></div><div><b>Zahlung</b><p>${escape(d.payment||'—')}</p></div></div>
   <div class="as-actions"><button onclick="LGStudio.replaceExternal('${d.id}')">${d.externalPath?'PDF ersetzen':'PDF hochladen'}</button>${d.externalPath?`<button class="secondary" onclick="LGStudio.downloadExternal('${d.id}')">PDF herunterladen</button>`:''}
@@ -145,7 +170,7 @@ const LGStudio=(()=>{
   <div class="as-meta"><div><label>Dokumentdatum</label><input id="as-date" type="date" value="${escape(d.date)}" ${ro?'disabled':''}></div><div><label>Mehrwertsteuer (%)</label><input id="as-vat" type="number" min="0" max="100" value="${Number(d.vat??19)}" ${ro?'disabled':''}></div><div><label>Dokumentnummer</label><input value="${escape(d.number||'Wird bei Freigabe vergeben')}" disabled></div></div>
   <div class="as-editor-layout"><div class="as-editor-document">
   <div id="as-paper" class="as-canvas"><div class="as-lock"><div class="as-address">${escape(c.name)}\n${escape(c.address||'Keine Rechnungsadresse hinterlegt')}</div><img alt="Die Lichtgestalter Logo" src="${LOGO}"></div>
-  <h2>${d.type==='Q'?'Angebot':'Auftragsbestätigung'}</h2><p>Datum: ${escape(d.date)}</p>
+  <h2>${d.type==='Q'?'Angebot':'Auftragsbestätigung'} Nr. ${escape(d.number||'Entwurf')}</h2><p style="text-align:right">Datum: ${escape(d.date)}</p>
   <div id="as-top" class="as-body" contenteditable="${!ro}" spellcheck="true">${cleanHtml(d.studioTop||initial())}</div>
   <h3>Positionen</h3><table class="as-position"><thead><tr><th>Pos.</th><th>Beschreibung</th><th>Menge</th><th>Einzelpreis netto</th><th>Rabatt %</th><th>Gesamt netto</th><th></th></tr></thead><tbody id="as-lines">${lineRows(d,ro)}</tbody></table>
   <div class="as-money">Netto: <span id="as-total">${eur(amount(d))}</span></div>
@@ -213,5 +238,5 @@ const LGStudio=(()=>{
   try{await html2pdf().set({margin:8,filename:(d.number||'Angebotsentwurf')+'.pdf',image:{type:'jpeg',quality:.97},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(clone).save()}
   catch(e){alert('PDF-Erstellung fehlgeschlagen: '+e.message)}finally{host.remove()}
  }
- return {page,newQuote,internal,external,deleteDraft,downloadExternal,replaceExternal,releaseExternal,manualDoc,open,saveDraft,release,back,format,heading,table,image,line,removeLine,order,invoice,exportPdf};
+ return {page,retryNumber,newQuote,internal,external,deleteDraft,downloadExternal,replaceExternal,releaseExternal,manualDoc,open,saveDraft,release,back,format,heading,table,image,line,removeLine,order,invoice,exportPdf};
 })();
