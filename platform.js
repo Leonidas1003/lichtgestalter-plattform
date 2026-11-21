@@ -23,13 +23,13 @@ window.addEventListener('message',e=>{
   if(!e.data.count||view!=='Finanzdaten'){bar.hidden=true;return}
   bar.hidden=false;
   bar.querySelector('[data-count]').textContent=e.data.count;
-  bar.querySelector('[data-expenses]').textContent=e.data.expenses;
-  bar.querySelector('[data-income]').textContent=e.data.income;
-  bar.querySelector('[data-net]').textContent=e.data.net;
+  bar.querySelector('[data-total]').textContent=e.data.total;
+  bar.querySelector('[data-paid]').textContent=e.data.paid;
+  bar.querySelector('[data-open]').textContent=e.data.open;
  }
 });
 const selectionBar=document.createElement('div');selectionBar.id='lg-global-selection';selectionBar.hidden=true;
-selectionBar.innerHTML='<strong><span data-count>0</span> ausgewählt</strong><span>Ausgaben: <b data-expenses></b></span><span>Einnahmen: <b data-income></b></span><span>Saldo: <b data-net></b></span><button type="button" id="lg-clear-selection">Auswahl aufheben</button>';
+selectionBar.innerHTML='<strong><span data-count>0</span> ausgewählt</strong><span>Gesamtbetrag: <b data-total></b></span><span>Bezahlt: <b data-paid></b></span><span>Noch offen: <b data-open></b></span><button type="button" id="lg-clear-selection">Auswahl aufheben</button>';
 document.body.appendChild(selectionBar);
 selectionBar.querySelector('button').onclick=()=>document.getElementById('lg-finance-frame')?.contentWindow?.postMessage({type:'lg-clear-selection'},location.origin);
 window.nav=function(){
