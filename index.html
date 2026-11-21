@@ -32,8 +32,8 @@ function customerDetail(cid){
  modal('Kunde · '+esc(c.name),`<div class="grid2"><div><label>Kundennummer</label><b>${esc(c.number||'–')}</b></div><div><label>Firma / Name</label><b>${esc(c.name)}</b></div><div><label>Ansprechpartner</label><span>${esc(c.contact||'–')}</span></div><div><label>E-Mail</label><span>${esc(c.email||'–')}</span></div></div>
  <div class="stats" style="margin:20px 0"><div class="stat">Angeboten netto<b>${eur(s.offered)}</b></div><div class="stat">Berechnet netto<b>${eur(s.invoiced)}</b></div><div class="stat">Offene Projekte<b>${s.open}</b></div><div class="stat">Abgeschlossene Projekte<b>${s.closed}</b></div></div>
  <div class="panel" style="margin:14px 0"><h3>Zahlungseingänge im aktuellen Jahr</h3><div id="customer-payments-${esc(cid)}">Zahlungen werden geladen …</div></div>
- <h3>Projekte des Kunden</h3><div class="tablewrap"><table><thead><tr><th>Nummer</th><th>Projekt</th><th>Phase</th><th></th></tr></thead><tbody>${s.ps.map(p=>`<tr class="clickable" onclick="projectDetail('${p.id}')"><td>${esc(p.number||'–')}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.phase||'–')}</td><td><button class="link" onclick="event.stopPropagation();projectDetail('${p.id}')">Öffnen →</button></td></tr>`).join('')}</tbody></table>${s.ps.length?'':'<div class="empty">Keine Projekte vorhanden</div>'}</div>
- <div class="foot"><button class="secondary" onclick="customerForm('${cid}')">Kunde bearbeiten</button><button onclick="closeModal()">Schließen</button></div>`);void lgCustomerPayments(cid);
+ <div class="panel" style="margin:14px 0"><h3>Rentabilitätsplanung · aktuelles Jahr</h3><div id="customer-plan-${esc(cid)}">Planungen werden geladen …</div></div><h3>Projekte des Kunden</h3><div class="tablewrap"><table><thead><tr><th>Nummer</th><th>Projekt</th><th>Phase</th><th></th></tr></thead><tbody>${s.ps.map(p=>`<tr class="clickable" onclick="projectDetail('${p.id}')"><td>${esc(p.number||'–')}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.phase||'–')}</td><td><button class="link" onclick="event.stopPropagation();projectDetail('${p.id}')">Öffnen →</button></td></tr>`).join('')}</tbody></table>${s.ps.length?'':'<div class="empty">Keine Projekte vorhanden</div>'}</div>
+ <div class="foot"><button class="secondary" onclick="customerForm('${cid}')">Kunde bearbeiten</button><button onclick="closeModal()">Schließen</button></div>`);void lgCustomerPayments(cid);void lgCustomerPlans(cid);
 }
 window.addEventListener('message',async event=>{
  if(event.origin!==location.origin||event.data?.type!=='lg-customer-created'||!cloudClient||!cloudReady)return;
@@ -43,6 +43,7 @@ window.addEventListener('message',async event=>{
   if(view==='Kunden')render();
  }catch(e){console.warn('Kundenabgleich:',e)}
 });
+async function lgCustomerPlans(cid){const el=document.getElementById('customer-plan-'+cid);if(!el||!cloudClient)return;try{const name=cust(cid)?.name;const yr=String(new Date().getFullYear());const {data,error}=await cloudClient.from('fin_profit_plans').select('customer,project,expected_date,revenue,costs,status').eq('customer',name);if(error)throw error;const ps=(data||[]).filter(p=>String(p.expected_date||'').startsWith(yr)&&!['deleted','cancelled'].includes(p.status));const revenue=ps.reduce((s,p)=>s+Number(p.revenue||0),0),costs=ps.reduce((s,p)=>s+Number(p.costs||0),0);el.innerHTML=`<p>Geplanter Umsatz: <b>${eur(revenue)}</b> · Geplante Projektkosten: <b>${eur(costs)}</b> · Deckungsbeitrag: <b>${eur(revenue-costs)}</b></p><table><thead><tr><th>Projekt</th><th>Erwartet</th><th>Umsatz</th><th>Kosten</th></tr></thead><tbody>${ps.map(p=>`<tr><td>${esc(p.project)}</td><td>${esc(p.expected_date)}</td><td>${eur(p.revenue)}</td><td>${eur(p.costs)}</td></tr>`).join('')}</tbody></table>`}catch(e){el.textContent='Planungen konnten nicht geladen werden: '+e.message}}
 async function lgCustomerPayments(cid){
  const el=document.getElementById('customer-payments-'+cid);if(!el||!cloudClient)return;
  try{
@@ -153,6 +154,19 @@ function createRevisionDraft(did){
  draft.deductionIds=[];draft.lines=(draft.lines||[]).map(l=>({...l,id:id()}));
  state.docs.push(draft);save();render();documentForm(draft.id);
 }
+async function lgBookReleasedInvoice(d){
+ if(d.type!=='I'||!d.number)return;
+ if(!cloudClient)throw Error('Supabase nicht verbunden');
+ const marker='LG-DOC-ID:'+d.id;
+ const {data:linked,error:readError}=await cloudClient.from('fin_entries').select('id,notes,invoice_no,customer_id').eq('kind','income').eq('invoice_no',d.number);
+ if(readError)throw readError;
+ if((linked||[]).some(e=>String(e.notes||'').includes(marker)||e.customer_id===d.customerId))return;
+ if((linked||[]).length)throw Error('Rechnungsnummer bereits einer anderen Finanzbuchung zugeordnet: '+d.number);
+ const gross=Math.round(amount(d)*(1+Number(d.vat??19)/100)*100)/100;
+ const due=String(d.date||today()).slice(0,10);
+ const payload={kind:'income',name:'Rechnung '+d.number+' · '+(cust(d.customerId)?.name||'Kunde'),invoice_no:d.number,customer_id:d.customerId,amount:gross,due_date:due,status:'open',notes:marker+' | Automatisch bei Rechnungsfreigabe erstellt. Fälligkeit bitte prüfen.'};
+ const {error}=await cloudClient.from('fin_entries').insert(payload);if(error)throw error;
+}
 async function releaseDocument(did){
  const d=doc(did);if(!d||docApproval(d)!=='draft'||d.number)return alert('Nur nummernlose Entwürfe können freigegeben werden.');
  if(!confirm(d.type==='Q'&&d.revisionRoot?'Angebotsversion '+d.revisionLabel+' freigeben? Danach ist sie gesperrt.':'Dokument verbindlich freigeben und endgültige Nummer vergeben? Danach ist es gesperrt.'))return;
@@ -162,6 +176,7 @@ async function releaseDocument(did){
   const {data,error}=await cloudClient.rpc(rpcName,{p_doc_id:did});
   if(error)throw Error(error.message);
   await lgLoad();closeModal();
+  if(d.type==='I'){try{await lgBookReleasedInvoice(doc(did))}catch(bookError){alert('Rechnung wurde freigegeben, aber die automatische Finanzbuchung ist fehlgeschlagen: '+bookError.message+'\nBitte prüfen, bevor du sie manuell erfasst.')}}
   alert('Freigegeben: '+data.number+' – PDF wird heruntergeladen.');
   await downloadDoc(did);
  }catch(e){alert('Freigabe fehlgeschlagen: '+e.message+'\n\nDer Entwurf bleibt erhalten.');}
