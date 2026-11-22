@@ -705,22 +705,18 @@ const LGStudio=(()=>{
   throw Error('Supabase-Rücklesung weicht ab ('+lastMismatch.join(', ')+'). Bitte nicht neu laden. Die aktuelle Bearbeitung bleibt geöffnet.');
  }
  async function saveDraft(){
+  let d;
   try{
-   if(typeof lgFlushPromise!=='undefined'&&lgFlushPromise)await lgFlushPromise;
-   const d=doc(current)?.studioFacsimile?collectFacsimile():collect();
-   const expected=studioDocumentContent(d);
-   try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:d}));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
-   if(typeof lgSaveOneDocument!=='function')throw Error('Neue Cloud-Speicherfunktion fehlt. Bitte cloud.js ebenfalls aktualisieren.');
-   try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
-   await lgSaveOneDocument(d.id, JSON.parse(JSON.stringify(d)));
-   // The database was read back by lgSaveOneDocument; verify document-specific content as well.
-   const verification=await studioVerifyRemote(d,expected);
-   if(verification.verified!=='full'){
-    dirty=true;
-    alert('Angebotstext gespeichert, aber Layoutabweichung ('+verification.differences.join(', ')+'). Bitte vor dem Neuladen prüfen.');
-    return;
-   }
-   try{localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
+   // Capture once: the editor DOM is the source of truth, never compare a live mutable object.
+   d=doc(current)?.studioFacsimile?collectFacsimile():collect();
+   const snapshot=JSON.parse(JSON.stringify(d));
+   try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:snapshot}));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
+   if(typeof lgSaveOneDocument!=='function')throw Error('Cloud-Speicherfunktion fehlt. Bitte cloud.js ebenfalls aktualisieren.');
+   const result=await lgSaveOneDocument(d.id,snapshot);
+   // lgSaveOneDocument performs the authoritative full-document readback. A second
+   // independent read can race with an unrelated background flush and falsely fail.
+   if(!lgSame(result.data,snapshot))throw Error('Datenbankinhalt stimmt nicht mit dem gespeicherten Entwurf überein.');
+   try{localStorage.setItem(KEY,JSON.stringify(state));localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
    dirty=false;
    alert('Entwurf in Supabase gespeichert und bestätigt.');
   }catch(e){dirty=true;alert('Speichern NICHT bestätigt: '+e.message+'\nDie aktuelle Bearbeitung bleibt geöffnet. Bitte nicht neu laden.');}

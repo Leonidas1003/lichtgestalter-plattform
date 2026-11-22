@@ -73,7 +73,7 @@ async function lgSaveOneDocument(docId, documentSnapshot){
  const previous=lgBaseline.docs[docId];
  const change={kind:'docs',id:docId,op:previous?'update':'insert',version:previous?.version||0,data:lgCopy(d)};
  // No-op if the same document is already confirmed by the database.
- if(previous&&lgSame(previous.data,change.data))return previous;
+ if(previous&&lgSame(previous.data,change.data))return {data:lgCopy(previous.data),version:previous.version};
  const {data,error}=await cloudClient.rpc('lg_apply_changes',{p_changes:[change]});
  if(error)throw Error('Angebot konnte nicht geschrieben werden: '+error.message);
  const {data:remote,error:readError}=await cloudClient.from('lg_records')
