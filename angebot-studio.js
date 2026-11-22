@@ -73,31 +73,21 @@ const LGStudio=(()=>{
   }}dirty=true}
  function facsimileLayout(page){
   if(!page||page.dataset.layoutBusy==='1')return;
+  const elements=[...page.querySelectorAll('[data-block],[data-template-table]')].filter(el=>el.dataset.flow!=='off');
   page.dataset.layoutBusy='1';
   try{
-   const px=page.clientWidth,py=page.clientHeight;
-   const left=px*.095,right=px*.09,top=py*.09,bottom=py*.09,gap=18;
-   const elements=[...page.querySelectorAll('[data-block],[data-template-table]')];
-   const items=elements.filter(el=>el.dataset.flow!=='off').map(el=>({el,anchor:Number(el.dataset.baseTop??el.offsetTop)})).sort((a,b)=>a.anchor-b.anchor);
-   let cursor=0;
-   for(const {el,anchor} of items){
-    const naturalHeight=Math.max(el.scrollHeight,el.offsetHeight);
-    const minTop=page.dataset.page==='0'?py*.39:top;
-    const y=Math.max(minTop,cursor?cursor+gap:Math.max(anchor,minTop));
-    const maxWidth=Math.max(80,px-right-left);
-    const x=Math.max(left,Math.min(el.offsetLeft,px-right-Math.min(el.offsetWidth,maxWidth)));
-    if(el.offsetWidth>maxWidth)el.style.width=(maxWidth/px*100)+'%';
-    el.style.left=(x/px*100)+'%';el.style.top=(y/py*100)+'%';
-    cursor=y+naturalHeight;
+   const items=elements.map(el=>({el,anchor:Number(el.dataset.baseTop??el.offsetTop)})).sort((a,b)=>a.anchor-b.anchor);
+   let bottom=0;
+   for(const item of items){
+    const el=item.el;
+    const y=Math.max(item.anchor,bottom?bottom+12:item.anchor);
+    el.style.top=(y/page.clientHeight*100)+'%';
+    bottom=y+Math.max(el.offsetHeight,el.scrollHeight);
    }
-   for(const el of elements.filter(e=>e.dataset.flow==='off')){
-    const x=Math.max(left,Math.min(el.offsetLeft,px-right-el.offsetWidth));
-    const y=Math.max(top,Math.min(el.offsetTop,py-bottom-el.offsetHeight));
-    el.style.left=(x/px*100)+'%';el.style.top=(y/py*100)+'%';
-   }
-   const overflow=elements.some(el=>el.offsetTop+Math.max(el.offsetHeight,el.scrollHeight)>py-bottom+1);
-   page.classList.toggle('as-page-overflow',overflow);
-   page.title=overflow?'Inhalt reicht über den sicheren Seitenrand hinaus. Bitte auf eine weitere Seite verteilen.':'';
+   const safeBottom=page.clientHeight-88;
+   const overflowing=items.filter(({el})=>el.offsetTop+Math.max(el.offsetHeight,el.scrollHeight)>safeBottom);
+   page.classList.toggle('as-page-overflow',overflowing.length>0);
+   page.title=overflowing.length?'Achtung: Inhalt überschreitet den unteren Seitenrand. Bitte auf die nächste Seite verschieben.':'';
   }finally{page.dataset.layoutBusy='0'}
  }
  function facsimileInitEditing(){
@@ -106,7 +96,7 @@ const LGStudio=(()=>{
     el.dataset.baseTop=String(el.offsetTop);el.dataset.baseHeight=String(el.offsetHeight);
     el.dataset.flow=el.dataset.flow||'on';
     el.style.resize='both';el.style.minWidth='45px';el.style.minHeight='24px';
-    if(el.matches('[data-block]')){el.style.overflow='visible';el.style.height='auto';}
+    if(el.matches('[data-block]'))el.style.overflow='auto';
     const handle=document.createElement('span');handle.className='as-drag-handle as-edit-only';handle.textContent='↕';handle.title='Textfeld oder Tabelle verschieben';handle.contentEditable='false';el.prepend(handle);
     handle.addEventListener('pointerdown',e=>{
       if(e.button!==0)return;
@@ -114,8 +104,8 @@ const LGStudio=(()=>{
       const page=el.closest('[data-page]'),rect=page.getBoundingClientRect();
       const sx=e.clientX,sy=e.clientY,x=el.offsetLeft,y=el.offsetTop;
       const move=ev=>{
-        const nx=Math.max(rect.width*.095,Math.min(rect.width*.91-el.offsetWidth,x+ev.clientX-sx));
-        const ny=Math.max(rect.height*.09,Math.min(rect.height*.91-el.offsetHeight,y+ev.clientY-sy));
+        const nx=Math.max(0,Math.min(rect.width-el.offsetWidth,x+ev.clientX-sx));
+        const ny=Math.max(0,Math.min(rect.height-el.offsetHeight,y+ev.clientY-sy));
         el.style.left=(nx/rect.width*100)+'%';
         el.style.top=(ny/rect.height*100)+'%';
         el.dataset.baseTop=String(ny);
@@ -126,8 +116,6 @@ const LGStudio=(()=>{
         document.removeEventListener('pointerup',stop);
         document.removeEventListener('pointercancel',stop);
         el.dataset.baseTop=String(el.offsetTop);
-        // Recompute order from the actual dropped positions, not old template anchors.
-        page.querySelectorAll('[data-block],[data-template-table]').forEach(node=>{node.dataset.baseTop=String(node.offsetTop)});
         facsimileLayout(page);
       };
       document.addEventListener('pointermove',move);
@@ -141,7 +129,6 @@ const LGStudio=(()=>{
       const ro=new ResizeObserver(()=>{if(!el.isConnected)return;const page=el.closest('[data-page]');if(page?.dataset.layoutBusy==='1')return;dirty=true;facsimileLayout(page)});ro.observe(el);
     }
   });
-  root.querySelectorAll('.as-facsimile-page').forEach(facsimileLayout);
  }
  function facsimilePage(){const d=collectFacsimile();d.studioFacsimilePages.push([]);open(d.id);dirty=true}
  function facsimileNewBlock(){const d=collectFacsimile(),n=Number(prompt('Auf welcher Seite (1–'+d.studioFacsimilePages.length+')?','1'));if(!Number.isInteger(n)||n<1||n>d.studioFacsimilePages.length)return;d.studioFacsimilePages[n-1].push({x:57,y:400,w:380,h:35,text:'Neuer Text',size:10,bold:false,flow:true});open(d.id);dirty=true}
@@ -235,15 +222,16 @@ const LGStudio=(()=>{
  #app .as-template-controls button{font-size:8px;padding:3px 5px;min-width:0}
  #app .as-facsimile-editor{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:16px;align-items:start}#app .as-facsimile-workspace{min-width:0;overflow:auto}#app .as-facsimile-sidebar{position:sticky;top:12px;max-height:calc(100vh - 30px);overflow:auto;padding:14px;border-radius:12px;background:#24354a;color:white;display:flex;flex-direction:column;gap:9px}#app .as-facsimile-sidebar details{border-top:1px solid #64748b;padding:8px 0}#app .as-facsimile-sidebar summary{font-weight:700;cursor:pointer;margin-bottom:8px}#app .as-facsimile-sidebar button{width:100%;margin:3px 0;padding:7px}#app .as-facsimile-sidebar label{display:block;margin:7px 0;font-size:12px}#app .as-facsimile-sidebar select,#app .as-facsimile-sidebar input{width:100%;margin-top:4px}#app .as-side-help{font-size:11px;opacity:.8}#app .as-template-table thead th{background:#bfc1c4!important;color:#111!important;@media(max-width:1100px){#app .as-facsimile-editor{grid-template-columns:1fr}#app .as-facsimile-sidebar{position:static;max-height:none}}
  #app .as-facsimile-page{overflow:hidden}
- #app .as-facsimile-block{box-sizing:border-box;overflow-wrap:anywhere;max-width:81%;line-height:1.5;}
- #app .as-template-table{box-sizing:border-box;max-width:81%;}
- #app .as-template-table td,#app .as-template-table th{color:inherit;overflow-wrap:anywhere;}
- #app .as-drag-handle{pointer-events:auto!important;z-index:100!important;}
-
  #app .as-drag-handle{font-size:12px!important;letter-spacing:0!important;line-height:1!important;opacity:.65;user-select:none!important;cursor:grab!important;white-space:nowrap!important;#app .as-cell-multi{outline:2px solid #2985df!important;outline-offset:-2px}#app .as-page-overflow{box-shadow:0 0 0 3px #c84b4b,0 2px 12px #0003!important;#app .as-facsimile-block:focus,#app .as-template-table [contenteditable=true]:focus{outline:1px dashed #2673b8}
  </style>`;
+ function ensureStudioStyle(){
+  let style=document.getElementById('lg-studio-style');
+  if(!style){document.head.insertAdjacentHTML('beforeend',css);style=document.getElementById('lg-studio-style')}
+  if(style&&!style.textContent.includes('.as-facsimile-page')){style.remove();document.head.insertAdjacentHTML('beforeend',css);style=document.getElementById('lg-studio-style')}
+  return style;
+ }
  function page(){
-  if(!document.getElementById('lg-studio-style'))document.head.insertAdjacentHTML('beforeend',css);
+  ensureStudioStyle();
   const rows=list().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   return `<section class="as-shell"><div class="as-head"><div><h2>Angebotsstudio</h2><p class="muted">Individuelle Angebote gestalten – mit geschütztem Briefkopf und strukturierten Rechnungspositionen.</p></div><button onclick="LGStudio.newQuote()">+ Individuelles Angebot</button></div>
   <div class="panel tablewrap"><table class="as-list"><thead><tr><th>Dokument</th><th>Kunde</th><th>Datum</th><th>Status</th><th>Netto</th><th>Aktionen</th></tr></thead><tbody>
@@ -268,6 +256,7 @@ const LGStudio=(()=>{
   app.querySelector('#as-customer').onchange=e=>{selectedCustomer=e.target.value;app.querySelector('#as-choice').style.display=selectedCustomer?'grid':'none'};
  }
  function internal(){
+  ensureStudioStyle();
   const c=cust(selectedCustomer);if(!c)return alert('Kunden auswählen.');
   const projects=state.projects.filter(p=>p.customerId===c.id);
   document.getElementById('app').innerHTML=`<section class="as-shell"><div class="as-head"><div><h2>Projekt für das Angebot wählen</h2><p class="muted">Kunde: ${escape(c.name)}</p></div><button class="secondary" onclick="LGStudio.newQuote()">← Zurück</button></div>
@@ -411,6 +400,7 @@ const LGStudio=(()=>{
   return (d.lines||[]).map((l,i)=>`<tr data-line="${i}"><td>${i+1}</td><td><input aria-label="Beschreibung" data-key="description" value="${escape(l.description)}" ${readonly?'disabled':''}></td><td><input aria-label="Menge" type="number" min="0" step="0.01" data-key="qty" value="${Number(l.qty||0)}" ${readonly?'disabled':''}></td><td><input aria-label="Einzelpreis" type="number" min="0" step="0.01" data-key="price" value="${Number(l.price||0)}" ${readonly?'disabled':''}></td><td><input aria-label="Rabatt" type="number" min="0" max="100" step="0.01" data-key="discount" value="${Number(l.discount||0)}" ${readonly?'disabled':''}></td><td>${eur(Number(l.qty||0)*Number(l.price||0)*(1-Number(l.discount||0)/100))}</td><td>${readonly?'':`<button class="danger" onclick="LGStudio.removeLine(${i})">×</button>`}</td></tr>`).join('');
  }
  function open(did){
+  ensureStudioStyle();
   const d=doc(did);if(!isStudio(d))return alert('Angebotsstudio-Dokument nicht gefunden.');
   current=did;dirty=false;if(d.external){openExternal(d);return}const ro=locked(d),c=cust(d.customerId)||{};if(d.studioFacsimile){const app=document.getElementById('app');app.innerHTML=`<section class="as-shell"><div class="as-head"><h2>Individuelles Angebot · ${escape(d.number||'Entwurf')}</h2><div class="as-actions"><button onclick="LGStudio.back()">← Übersicht</button><button onclick="LGStudio.exportPdf()">PDF</button><button onclick="LGStudio.templateLibrary()">Vorlagenbibliothek</button>${ro?'':`<button onclick="LGStudio.saveDraft()">Speichern</button><button onclick="LGStudio.release()">Freigeben</button>`}</div></div><div class="as-meta"><label>Datum<input id="as-date" type="date" value="${escape(d.date)}" ${ro?'disabled':''}></label></div><div class="as-facsimile-editor"><div class="as-facsimile-workspace">${facsimile(d,ro)}</div>${ro?'':`<aside class="as-facsimile-sidebar"><h3>Werkzeuge</h3><details open><summary>Seiten & Vorlagen</summary><button onclick="LGStudio.facsimilePage()">+ Seite</button><button onclick="LGStudio.facsimilePageDelete()">Seite löschen</button><button onclick="LGStudio.templateSave()">Als Vorlage speichern</button><button onclick="LGStudio.templateLibrary()">Vorlagenbibliothek</button></details><details open><summary>Text & Absatz</summary><button onclick="LGStudio.facsimileNewBlock()">+ Textfeld</button><button onclick="LGStudio.facsimileDeleteBlock()">Textfeld löschen</button><span>Textfluss: <b id="as-flow-status">An</b></span><button onclick="LGStudio.facsimileFlow()">Textfluss an/aus</button><p class="as-side-help">Textfelder und Tabellen am unteren rechten Rand ziehen, um die Größe zu ändern.</p><button onclick="LGStudio.facsimileFormat('bold')"><b>Fett</b></button><button onclick="LGStudio.facsimileFormat('italic')"><i>Kursiv</i></button><button onclick="LGStudio.facsimileFormat('underline')"><u>Unterstreichen</u></button><button onclick="LGStudio.facsimileFormat('insertUnorderedList')">Aufzählung</button><button onclick="LGStudio.facsimileFont()">Schriftgröße</button><label>Schriftart<select onchange="LGStudio.facsimileFontFamily(this.value)"><option>Arial</option><option>Helvetica</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option></select></label><label>Schriftfarbe<input type="color" onchange="LGStudio.facsimileColor(this.value)"></label><label>Hervorhebung<input type="color" value="#ffff99" onchange="LGStudio.facsimileHighlight(this.value)"></label><label>Zeilenabstand<select onchange="LGStudio.facsimileSpacing(this.value)"><option value="1">1,0</option><option value="1.15" selected>1,15</option><option value="1.5">1,5</option><option value="2">2,0</option></select></label><button onclick="LGStudio.facsimileAlign('justifyLeft')">Linksbündig</button><button onclick="LGStudio.facsimileAlign('justifyCenter')">Zentriert</button><button onclick="LGStudio.facsimileAlign('justifyRight')">Rechtsbündig</button></details><details open><summary>Tabellen & Rechnen</summary><button onclick="LGStudio.facsimileTableAdd()">+ Tabelle</button><button onclick="LGStudio.facsimileTableStyle()">Tabellenart festlegen</button><button onclick="LGStudio.facsimileCellFormula()">Zellformel (=)</button><label>Zellhintergrund <input id="as-cell-bg-picker" type="color" value="#ffffff" oninput="LGStudio.facsimileApplyCellColor('bg',this.value)"></label><label>Zellschriftfarbe <input id="as-cell-text-picker" type="color" value="#111111" oninput="LGStudio.facsimileApplyCellColor('text',this.value)"></label><p class="as-side-help">Tabellenkopf grau. Tabellen direkt anklicken für Zeilen, Spalten und Breiten.</p></details></aside>`}</div></section>`;app.querySelectorAll('[data-block],[data-template-table]').forEach(e=>e.addEventListener('input',()=>{dirty=true}));facsimileInitEditing();app.querySelector('#as-date')?.addEventListener('change',()=>{dirty=true;collectFacsimile();open(d.id)});return;}
   const app=document.getElementById('app');
