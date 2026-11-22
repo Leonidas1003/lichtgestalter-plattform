@@ -64,11 +64,11 @@ async function lgFlush(){
 }
 // Save a single document without re-sending unrelated settings/customers/projects.
 // Wait for any in-flight global flush, then use the server's versioned RPC.
-async function lgSaveOneDocument(docId){
+async function lgSaveOneDocument(docId, documentSnapshot){
  if(!cloudReady||!cloudClient)throw Error('Supabase nicht bereit.');
  if(lgFlushPromise)await lgFlushPromise;
  if(lgBlocked)throw Error('Cloud-Synchronisierung blockiert; bitte zuerst den zugrunde liegenden Fehler beheben.');
- const d=state.docs.find(x=>x.id===docId);
+ const d=documentSnapshot||state.docs.find(x=>x.id===docId);
  if(!d)throw Error('Angebot nicht im lokalen Zustand gefunden.');
  const previous=lgBaseline.docs[docId];
  const change={kind:'docs',id:docId,op:previous?'update':'insert',version:previous?.version||0,data:lgCopy(d)};

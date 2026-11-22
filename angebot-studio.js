@@ -706,12 +706,13 @@ const LGStudio=(()=>{
  }
  async function saveDraft(){
   try{
+   if(typeof lgFlushPromise!=='undefined'&&lgFlushPromise)await lgFlushPromise;
    const d=doc(current)?.studioFacsimile?collectFacsimile():collect();
    const expected=studioDocumentContent(d);
    try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:d}));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
    if(typeof lgSaveOneDocument!=='function')throw Error('Neue Cloud-Speicherfunktion fehlt. Bitte cloud.js ebenfalls aktualisieren.');
    try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
-   await lgSaveOneDocument(d.id);
+   await lgSaveOneDocument(d.id, JSON.parse(JSON.stringify(d)));
    // The database was read back by lgSaveOneDocument; verify document-specific content as well.
    const verification=await studioVerifyRemote(d,expected);
    if(verification.verified!=='full'){
