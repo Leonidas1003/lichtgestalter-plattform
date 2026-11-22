@@ -709,22 +709,19 @@ const LGStudio=(()=>{
    const d=doc(current)?.studioFacsimile?collectFacsimile():collect();
    const expected=studioDocumentContent(d);
    try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:d}));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
-   if(typeof lgFlush!=='function'||!cloudClient||!cloudReady)throw Error('Supabase nicht bereit.');
-   if(lgBlocked)throw Error('Supabase-Synchronisierung blockiert.');
-   // Do not call save(): it starts an unawaited write. Await the shared write directly.
+   if(typeof lgSaveOneDocument!=='function')throw Error('Neue Cloud-Speicherfunktion fehlt. Bitte cloud.js ebenfalls aktualisieren.');
    try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
-   await lgFlush();
-   // In-flight write has completed; commit any edits made during that write.
-   if(lgChanges().length)await lgFlush();
+   await lgSaveOneDocument(d.id);
+   // The database was read back by lgSaveOneDocument; verify document-specific content as well.
    const verification=await studioVerifyRemote(d,expected);
-   if(verification.verified==='content-only'){
-     dirty=true;
-     alert('Angebotstexte und Tabelleninhalte sind in Supabase bestätigt. Die Layoutpositionen bzw. Größen weichen jedoch ab ('+verification.differences.join(', ')+').\nDie lokale Sicherheitskopie bleibt erhalten. Bitte vor dem Neuladen prüfen.');
-     return;
+   if(verification.verified!=='full'){
+    dirty=true;
+    alert('Angebotstext gespeichert, aber Layoutabweichung ('+verification.differences.join(', ')+'). Bitte vor dem Neuladen prüfen.');
+    return;
    }
    try{localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
    dirty=false;
-   alert('Entwurf erfolgreich gespeichert und mit Supabase abgeglichen.');
+   alert('Entwurf in Supabase gespeichert und bestätigt.');
   }catch(e){dirty=true;alert('Speichern NICHT bestätigt: '+e.message+'\nDie aktuelle Bearbeitung bleibt geöffnet. Bitte nicht neu laden.');}
  }
  async function release(){

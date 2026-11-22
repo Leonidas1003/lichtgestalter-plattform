@@ -62,6 +62,28 @@ async function lgFlush(){
  })();
  return lgFlushPromise;
 }
+// Save a single document without re-sending unrelated settings/customers/projects.
+// Wait for any in-flight global flush, then use the server's versioned RPC.
+async function lgSaveOneDocument(docId){
+ if(!cloudReady||!cloudClient)throw Error('Supabase nicht bereit.');
+ if(lgFlushPromise)await lgFlushPromise;
+ if(lgBlocked)throw Error('Cloud-Synchronisierung blockiert; bitte zuerst den zugrunde liegenden Fehler beheben.');
+ const d=state.docs.find(x=>x.id===docId);
+ if(!d)throw Error('Angebot nicht im lokalen Zustand gefunden.');
+ const previous=lgBaseline.docs[docId];
+ const change={kind:'docs',id:docId,op:previous?'update':'insert',version:previous?.version||0,data:lgCopy(d)};
+ // No-op if the same document is already confirmed by the database.
+ if(previous&&lgSame(previous.data,change.data))return previous;
+ const {data,error}=await cloudClient.rpc('lg_apply_changes',{p_changes:[change]});
+ if(error)throw Error('Angebot konnte nicht geschrieben werden: '+error.message);
+ const {data:remote,error:readError}=await cloudClient.from('lg_records')
+  .select('kind,id,data,version').eq('kind','docs').eq('id',docId).single();
+ if(readError||!remote)throw Error('Rücklesung des Angebots fehlgeschlagen: '+(readError?.message||'Datensatz fehlt'));
+ // Never advance baseline for a different version of the content.
+ if(!lgSame(remote.data,change.data))throw Error('Supabase enthält nach dem Schreiben nicht den gesendeten Angebotsstand.');
+ lgBaseline.docs[docId]={version:remote.version,data:lgCopy(remote.data)};
+ return remote;
+}
 const lgOldSave=save;
 save=function(){
  try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
