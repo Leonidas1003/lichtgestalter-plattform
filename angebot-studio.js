@@ -32,7 +32,7 @@ const LGStudio=(()=>{
   ${pi===0?`<div class="as-facsimile-sender">Die Lichtgestalter • Ges. für Licht + Raum mbH - Adam-Höfle-Weg 11 - 64673 Zwingenberg</div><div class="as-facsimile-customer">${escape(c.name||'')}<br>${escape(c.address||'').replace(/\n/g,'<br>')}</div><div class="as-facsimile-date">${escape(formatGermanDate(d.date))}</div><div class="as-facsimile-number"><b>Angebot Nr. ${escape(d.number||'Entwurf')}</b></div>`:''}
   ${blocks.map((b,i)=>{const tableArea=(pi===0&&b.y>=642)||(pi===1&&b.y>=120&&b.y<=715)||(pi===2&&((b.y>=128&&b.y<=432)||(b.y>=535&&b.y<=737)))||(pi===3&&b.y>=195&&b.y<=315);if(tableArea)return '';return `<div class="as-facsimile-block" data-block="${i}" contenteditable="${!ro}" style="left:${b.x/595.2756*100}%;top:${b.y/841.8898*100}%;width:${Math.min(100-b.x/595.2756*100,b.w/595.2756*100+2)}%;height:${(b.h||20)/841.8898*100}%;font-size:${b.size}pt;font-weight:${b.bold?700:400};${b.flow===false?'':''}" data-flow="${b.flow===false?'off':'on'}">${b.html?cleanHtml(b.html):escape(b.text).replace(/\n/g,'<br>')}</div>`}).join('')}
   ${pi===0?`<div class="as-facsimile-company">Die Lichtgestalter<br>Gesellschaft für Licht + Raum mbH<br><br>Adam-Höfle-Weg 11<br>64673 Zwingenberg<br>T +49.6251.84808.0<br>F +49.6251.8480818<br><br>contact@dielichtgestalter.de<br><br>Geschäftsführer:<br>Christoph Adlfinger-Pullmann<br><br>Registerblatt HRB 95326<br>Registergericht Darmstadt<br>USt-IdNr. DE305886656</div>`:''}
-  ${(d.studioTemplateTables||[]).map((t,i)=>t.page===pi+1?`<div class="as-template-table as-table-${t.kind||'free'}" data-template-table="${i}" data-flow="${t.flow===false?'off':'on'}" style="left:${t.x/595.2756*100}%;top:${t.y/841.8898*100}%;width:${t.w/595.2756*100}%;${t.h?`height:${t.h/841.8898*100}%;`:``}"><div class="as-template-controls as-edit-only">${ro?'':`<button onclick="LGStudio.facsimileTableRow(${i})">+ Zeile</button><button onclick="LGStudio.facsimileTableCol(${i})">+ Spalte</button><button onclick="LGStudio.facsimileTableWidth(${i})">Breiten</button><button onclick="LGStudio.facsimileTableCalc(${i})">Berechnen</button><button onclick="LGStudio.facsimileTableDelete(${i})">Entfernen</button>`}</div><table><colgroup>${(t.widths||t.headers.map(()=>100/t.headers.length)).map(w=>`<col style="width:${Number(w)}%">`).join('')}</colgroup>${t.headers.length?`<thead><tr>${t.headers.map((h,j)=>`<th contenteditable="${!ro}" data-th="${j}" style="background:${escape(t.headerColors?.[j]||'#bcbcbc')}!important;color:${escape(t.headerTextColors?.[j]||'#111111')}!important}">${escape(h)}</th>`).join('')}</tr></thead>`:''}<tbody>${t.rows.map((r,ri)=>`<tr>${r.map((v,j)=>`<td contenteditable="${!ro}" data-tr="${ri}" data-td="${j}" style="background:${escape(t.cellColors?.[ri+','+j]||'#ffffff')}!important;color:${escape(t.cellTextColors?.[ri+','+j]||'#111111')}!important}">${escape(v).replace(/\n/g,'<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'').join('')}
+  ${(d.studioTemplateTables||[]).map((t,i)=>t.page===pi+1?`<div class="as-template-table as-table-${t.kind||'free'}" data-template-table="${i}" data-flow="${t.flow===false?'off':'on'}" style="left:${t.x/595.2756*100}%;top:${t.y/841.8898*100}%;width:${t.w/595.2756*100}%;${t.h?`height:${t.h/841.8898*100}%;`:``}"><div class="as-template-controls as-edit-only">${ro?'':`<button onclick="LGStudio.facsimileTableRow(${i})">+ Zeile</button><button onclick="LGStudio.facsimileTableCol(${i})">+ Spalte</button><button onclick="LGStudio.facsimileTableWidth(${i})">Breiten</button><button onclick="LGStudio.facsimileTableCalc(${i})">Berechnen</button><button onclick="LGStudio.facsimileTableDelete(${i})">Entfernen</button>`}</div><table><colgroup>${(t.widths||t.headers.map(()=>100/t.headers.length)).map(w=>`<col style="width:${Number(w)}%">`).join('')}</colgroup>${t.headers.length?`<thead><tr>${t.headers.map((h,j)=>`<th contenteditable="${!ro}" data-th="${j}" style="background:${escape(t.headerColors?.[j]||'#bcbcbc')}!important;color:${escape(t.headerTextColors?.[j]||'#111111')}!important;">${escape(h)}</th>`).join('')}</tr></thead>`:''}<tbody>${t.rows.map((r,ri)=>`<tr>${r.map((v,j)=>`<td contenteditable="${!ro}" data-tr="${ri}" data-td="${j}" style="background:${escape(t.cellColors?.[ri+','+j]||'#ffffff')}!important;color:${escape(t.cellTextColors?.[ri+','+j]||'#111111')}!important;">${escape(v).replace(/\n/g,'<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'').join('')}
   <div class="as-facsimile-footer">Seite ${pi+1} von ${pages.length}</div></div>`).join('')}</div>`;
  }
  function collectFacsimile(){const d=doc(current);if(!d||locked(d))throw Error('Dokument gesperrt');
@@ -67,7 +67,7 @@ const LGStudio=(()=>{
   picker.click();
  }
  function rgbToHex(value){const m=String(value).match(/\d+/g);return m?.length>=3?'#'+m.slice(0,3).map(n=>Number(n).toString(16).padStart(2,'0')).join(''):'#ffffff'}
- function facsimileApplyCellColor(kind,value){const el=selectedCell?.isConnected?selectedCell:null;if(!el)return alert('Bitte Tabellenzelle auswählen.');for(const cell of selectedCells.size?selectedCells:[el]){if(cell.isConnected)cell.style.setProperty(kind==='bg'?'background-color':'color',value,'important')}dirty=true}
+ function facsimileApplyCellColor(kind,value){const el=selectedCell?.isConnected?selectedCell:document.querySelector('#as-facsimile .as-cell-multi');if(!el)return alert('Bitte Tabellenzelle auswählen.');for(const cell of selectedCells.size?selectedCells:[el]){if(cell.isConnected)cell.style.setProperty(kind==='bg'?'background-color':'color',value,'important');if(kind==='text')cell.querySelectorAll('span,font,p,div').forEach(n=>n.style.setProperty('color',value,'important'))}dirty=true}
  function facsimileLayout(page){
   if(!page||page.dataset.layoutBusy==='1')return;
   const elements=[...page.querySelectorAll('[data-block],[data-template-table]')].filter(el=>el.dataset.flow!=='off');
@@ -92,16 +92,29 @@ const LGStudio=(()=>{
   root.querySelectorAll('[data-block],[data-template-table]').forEach(el=>{
     el.dataset.baseTop=String(el.offsetTop);el.dataset.baseHeight=String(el.offsetHeight);
     el.dataset.flow=el.dataset.flow||'on';
-    el.style.resize='both';el.style.minWidth='45px';el.style.minHeight='24px';
+    el.style.resize='both';el.style.position='absolute';el.style.minWidth='45px';el.style.minHeight='24px';
     if(el.matches('[data-block]'))el.style.overflow='auto';
     const handle=document.createElement('span');handle.className='as-drag-handle as-edit-only';handle.textContent='↕';handle.title='Textfeld oder Tabelle verschieben';handle.contentEditable='false';el.prepend(handle);
     handle.addEventListener('pointerdown',e=>{
-      if(e.button!==0)return;e.preventDefault();e.stopPropagation();facsimileSelect(el);
-      const page=el.closest('[data-page]'),rect=page.getBoundingClientRect(),sx=e.clientX,sy=e.clientY,x=el.offsetLeft,y=el.offsetTop;
-      handle.setPointerCapture(e.pointerId);
-      const move=ev=>{const nx=Math.max(0,Math.min(rect.width-el.offsetWidth,x+ev.clientX-sx));const ny=Math.max(0,Math.min(rect.height-el.offsetHeight,y+ev.clientY-sy));el.style.left=(nx/rect.width*100)+'%';el.style.top=(ny/rect.height*100)+'%';el.dataset.baseTop=String(ny);dirty=true};
-      const stop=()=>{el.dataset.baseTop=String(el.offsetTop);handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',stop);handle.removeEventListener('pointercancel',stop);facsimileLayout(page)};
-      handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',stop);handle.addEventListener('pointercancel',stop);
+      if(e.button!==0)return;
+      e.preventDefault();e.stopPropagation();facsimileSelect(el);
+      const page=el.closest('[data-page]'),rect=page.getBoundingClientRect();
+      const sx=e.clientX,sy=e.clientY,x=el.offsetLeft,y=el.offsetTop;
+      const move=ev=>{
+        const nx=Math.max(0,Math.min(rect.width-el.offsetWidth,x+ev.clientX-sx));
+        const ny=Math.max(0,Math.min(rect.height-el.offsetHeight,y+ev.clientY-sy));
+        el.style.left=(nx/rect.width*100)+'%';el.style.top=(ny/rect.height*100)+'%';
+        el.dataset.baseTop=String(ny);dirty=true;
+      };
+      const stop=()=>{
+        document.removeEventListener('pointermove',move);
+        document.removeEventListener('pointerup',stop);
+        document.removeEventListener('pointercancel',stop);
+        el.dataset.baseTop=String(el.offsetTop);facsimileLayout(page);
+      };
+      document.addEventListener('pointermove',move);
+      document.addEventListener('pointerup',stop);
+      document.addEventListener('pointercancel',stop);
     });
     el.addEventListener('pointerdown',e=>{if(e.target.closest('button,.as-drag-handle'))return;facsimileSelect(e.target.closest('td,th')||el,e.ctrlKey||e.metaKey||e.shiftKey)});
     el.addEventListener('input',()=>{dirty=true;facsimileLayout(el.closest('[data-page]'))});
@@ -145,15 +158,15 @@ const LGStudio=(()=>{
  #app .as-protected{margin-top:38px;text-align:right;font-size:11px;color:#5b6573;border-top:1px solid #ddd;padding-top:16px}
  #app .as-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}#app .as-meta label{font-size:12px}
  #app .as-meta input,#app .as-meta select{width:100%}#app .as-list{width:100%}#app .as-list td{padding:13px}
- #app .as-canvas{position:relative!important;background:#fff!important;color:#171717!important;font-family:Arial,Helvetica,sans-serif!important;max-width:860px!important;padding:100px 190px 85px 62px!important;min-height:1120px!important;font-size:12px!important;line-height:1.45!important}
- #app .as-lock{min-height:180px!important;display:block!important;border:0!important;padding:0!important;margin-bottom:16px!important}
- #app .as-lock img{position:absolute;right:24px;top:28px;max-width:170px!important;max-height:70px!important}
- #app .as-address{font-size:12px!important;white-space:pre-line!important;padding-top:45px!important}
- #app .as-canvas>h2{font-size:15px!important;font-style:italic;font-weight:800!important;margin-top:15px!important}
- #app .as-protected{position:absolute!important;right:20px!important;top:640px!important;width:135px!important;text-align:right!important;border:0!important;font-size:9px!important;line-height:1.5!important;color:#777!important}
- #app .as-position th{background:#bcbcbc!important;color:#111!important;font-size:11px!important}
- #app .as-position td{border:0!important;border-bottom:1px solid #dedede!important}
- @media(max-width:850px){#app .as-canvas{padding:90px 25px 90px 30px!important}#app .as-protected{position:static!important;width:auto!important;text-align:right!important}}
+ #app .as-canvas{position:relative!important;background:#fff!important;color:#171717!important;font-family:Arial,Helvetica,sans-serif!important;max-width:860px!important;padding:100px 190px 85px 62px!important;min-height:1120px!important;font-size:12px!important;line-height:1.45!important;
+ #app .as-lock{min-height:180px!important;display:block!important;border:0!important;padding:0!important;margin-bottom:16px!important;
+ #app .as-lock img{position:absolute;right:24px;top:28px;max-width:170px!important;max-height:70px!important;
+ #app .as-address{font-size:12px!important;white-space:pre-line!important;padding-top:45px!important;
+ #app .as-canvas>h2{font-size:15px!important;font-style:italic;font-weight:800!important;margin-top:15px!important;
+ #app .as-protected{position:absolute!important;right:20px!important;top:640px!important;width:135px!important;text-align:right!important;border:0!important;font-size:9px!important;line-height:1.5!important;color:#777!important;
+ #app .as-position th{background:#bcbcbc!important;color:#111!important;font-size:11px!important;
+ #app .as-position td{border:0!important;border-bottom:1px solid #dedede!important;
+ @media(max-width:850px){#app .as-canvas{padding:90px 25px 90px 30px!important;#app .as-protected{position:static!important;width:auto!important;text-align:right!important;}
  #app .as-pagebreak{break-before:page;page-break-before:always} #app .as-position tr,#app .as-free-table tr{break-inside:avoid;page-break-inside:avoid}
  #app .as-free-table{border-collapse:collapse;width:100%;margin:12px 0 22px;font-size:12px}
  #app .as-free-table th{background:#bdbfc0!important;color:#111!important;font-weight:700;padding:9px;border:1px solid #b6b6b6}
@@ -165,13 +178,13 @@ const LGStudio=(()=>{
  #app .as-canvas .as-money{font-size:13px}
  #app .as-external-card{max-width:1000px;margin:auto;padding:26px;border-radius:14px}#app .as-external-card input,#app .as-external-card textarea{width:100%;margin-top:6px}#app .as-external-card label{display:block;font-size:13px;font-weight:600}#app .as-number{font-size:25px;font-weight:800;letter-spacing:.05em;padding:16px 20px;border:1px solid #70819a;border-radius:10px;display:inline-block;margin:8px 0 16px}#app .as-message{font-size:13px;color:#5a6472;margin-top:10px}#app .as-money{text-align:right;margin-top:12px;font-weight:bold}
  @media(max-width:700px){#app .as-canvas{padding:20px;min-height:650px}#app .as-meta{grid-template-columns:1fr}#app .as-lock img{max-width:100px}}
- @media print{#app .as-tools,#app .as-actions,#app .as-meta,#app .as-message{display:none!important}}
+ @media print{#app .as-tools,#app .as-actions,#app .as-meta,#app .as-message{display:none!important;}
 
  #app #as-facsimile{display:flex;flex-direction:column;align-items:center;gap:18px;background:#e9edf2;padding:20px}
  #app .as-facsimile-page{position:relative;width:210mm;height:297mm;min-width:210mm;min-height:297mm;background:#fff;color:#111;box-shadow:0 2px 12px #0003;overflow:hidden;break-after:page;page-break-after:always;font-family:Arial,Helvetica,sans-serif}
  #app .as-facsimile-block{position:absolute;white-space:pre-wrap;line-height:1.5;outline:1px dashed transparent;overflow:visible;min-height:10px;z-index:2}
- #app .as-selected{outline:2px solid #3477bb!important;outline-offset:2px} #app .as-drag-handle{font-size:12px!important;letter-spacing:0!important;line-height:1!important;opacity:.65;user-select:none!important;cursor:grab!important;white-space:nowrap!important}#app .as-facsimile-block:focus{outline:1px dashed #2c72cc;background:#f1f7ff}
- #app .as-drag-handle{position:absolute;top:-15px;left:0;background:#2d4667;color:#fff;padding:1px 9px;border-radius:5px 5px 0 0;cursor:grab;z-index:20;font-size:12px;touch-action:none;user-select:none}
+ #app .as-selected{outline:2px solid #3477bb!important;outline-offset:2px} #app .as-drag-handle{touch-action:none;pointer-events:auto;position:absolute;left:-24px;top:0;z-index:50;background:#29415e;color:white;border-radius:4px;padding:4px 7px;font-size:12px!important;letter-spacing:0!important;line-height:1!important;opacity:.65;user-select:none!important;cursor:grab!important;white-space:nowrap!important;#app .as-facsimile-block:focus{outline:1px dashed #2c72cc;background:#f1f7ff}
+ #app .as-drag-handle{touch-action:none;pointer-events:auto;position:absolute;left:-24px;top:0;z-index:50;background:#29415e;color:white;border-radius:4px;padding:4px 7px;position:absolute;top:-15px;left:0;background:#2d4667;color:#fff;padding:1px 9px;border-radius:5px 5px 0 0;cursor:grab;z-index:20;font-size:12px;touch-action:none;user-select:none}
  #app .as-drag-handle:active{cursor:grabbing}
  #app .as-template-table{overflow:visible}
  #app .as-facsimile-logo{position:absolute;right:9%;top:4%;width:25%;max-height:8%;object-fit:contain}
@@ -201,9 +214,9 @@ const LGStudio=(()=>{
  #app .as-table-rates td:last-child{text-align:right}
  #app .as-template-controls{position:absolute;top:-23px;right:0;display:flex;gap:2px;z-index:10;white-space:nowrap;background:#fff}
  #app .as-template-controls button{font-size:8px;padding:3px 5px;min-width:0}
- #app .as-facsimile-editor{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:16px;align-items:start}#app .as-facsimile-workspace{min-width:0;overflow:auto}#app .as-facsimile-sidebar{position:sticky;top:12px;max-height:calc(100vh - 30px);overflow:auto;padding:14px;border-radius:12px;background:#24354a;color:white;display:flex;flex-direction:column;gap:9px}#app .as-facsimile-sidebar details{border-top:1px solid #64748b;padding:8px 0}#app .as-facsimile-sidebar summary{font-weight:700;cursor:pointer;margin-bottom:8px}#app .as-facsimile-sidebar button{width:100%;margin:3px 0;padding:7px}#app .as-facsimile-sidebar label{display:block;margin:7px 0;font-size:12px}#app .as-facsimile-sidebar select,#app .as-facsimile-sidebar input{width:100%;margin-top:4px}#app .as-side-help{font-size:11px;opacity:.8}#app .as-template-table thead th{background:#bfc1c4!important;color:#111!important}@media(max-width:1100px){#app .as-facsimile-editor{grid-template-columns:1fr}#app .as-facsimile-sidebar{position:static;max-height:none}}
+ #app .as-facsimile-editor{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:16px;align-items:start}#app .as-facsimile-workspace{min-width:0;overflow:auto}#app .as-facsimile-sidebar{position:sticky;top:12px;max-height:calc(100vh - 30px);overflow:auto;padding:14px;border-radius:12px;background:#24354a;color:white;display:flex;flex-direction:column;gap:9px}#app .as-facsimile-sidebar details{border-top:1px solid #64748b;padding:8px 0}#app .as-facsimile-sidebar summary{font-weight:700;cursor:pointer;margin-bottom:8px}#app .as-facsimile-sidebar button{width:100%;margin:3px 0;padding:7px}#app .as-facsimile-sidebar label{display:block;margin:7px 0;font-size:12px}#app .as-facsimile-sidebar select,#app .as-facsimile-sidebar input{width:100%;margin-top:4px}#app .as-side-help{font-size:11px;opacity:.8}#app .as-template-table thead th{background:#bfc1c4!important;color:#111!important;@media(max-width:1100px){#app .as-facsimile-editor{grid-template-columns:1fr}#app .as-facsimile-sidebar{position:static;max-height:none}}
  #app .as-facsimile-page{overflow:hidden}
- #app .as-drag-handle{font-size:12px!important;letter-spacing:0!important;line-height:1!important;opacity:.65;user-select:none!important;cursor:grab!important;white-space:nowrap!important}#app .as-cell-multi{outline:2px solid #2985df!important;outline-offset:-2px}#app .as-page-overflow{box-shadow:0 0 0 3px #c84b4b,0 2px 12px #0003!important}#app .as-facsimile-block:focus,#app .as-template-table [contenteditable=true]:focus{outline:1px dashed #2673b8}
+ #app .as-drag-handle{touch-action:none;pointer-events:auto;position:absolute;left:-24px;top:0;z-index:50;background:#29415e;color:white;border-radius:4px;padding:4px 7px;font-size:12px!important;letter-spacing:0!important;line-height:1!important;opacity:.65;user-select:none!important;cursor:grab!important;white-space:nowrap!important;#app .as-cell-multi{outline:2px solid #2985df!important;outline-offset:-2px}#app .as-page-overflow{box-shadow:0 0 0 3px #c84b4b,0 2px 12px #0003!important;#app .as-facsimile-block:focus,#app .as-template-table [contenteditable=true]:focus{outline:1px dashed #2673b8}
  </style>`;
  function page(){
   if(!document.getElementById('lg-studio-style'))document.head.insertAdjacentHTML('beforeend',css);
