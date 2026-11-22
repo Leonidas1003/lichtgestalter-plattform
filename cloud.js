@@ -24,26 +24,38 @@ async function lgLoad(){
 }
 function lgCurrent(){return {customers:Object.fromEntries(state.customers.map(x=>[x.id,x])),projects:Object.fromEntries(state.projects.map(x=>[x.id,x])),docs:Object.fromEntries(state.docs.map(x=>[x.id,x])),settings:{main:state.settings}};}
 function lgChanges(){const now=lgCurrent(),out=[];for(const kind of ['customers','projects','docs','settings']){const old=lgBaseline[kind],fresh=now[kind];for(const id of new Set([...Object.keys(old),...Object.keys(fresh)])){const a=old[id],b=fresh[id];if(a&&!b)out.push({kind,id,op:'delete',version:a.version});else if(!a&&b)out.push({kind,id,op:'insert',version:0,data:b});else if(a&&b&&JSON.stringify(a.data)!==JSON.stringify(b))out.push({kind,id,op:'update',version:a.version,data:b});}}return out;}
+// One shared flush promise: a caller waits for the actual in-flight write.
+let lgFlushPromise=null;
 async function lgFlush(){
- if(!cloudReady||lgBlocked)return;
- if(lgBusy){lgQueued=true;return;}
+ if(!cloudReady)throw Error('Supabase noch nicht bereit.');
+ if(lgBlocked)throw Error('Supabase-Synchronisierung blockiert.');
+ if(lgFlushPromise){lgQueued=true;return lgFlushPromise;}
  lgBusy=true;
- try{
-  do{
-   lgQueued=false;const changes=lgChanges();if(!changes.length)break;
-   const {data,error}=await cloudClient.rpc('lg_apply_changes',{p_changes:changes});
-   if(error)throw Error(error.message);
-   for(const r of data){if(r.deleted)delete lgBaseline[r.kind][r.id];else lgBaseline[r.kind][r.id]={version:r.version,data:r.data};
+ lgFlushPromise=(async()=>{
+  try{
+   let passes=0;
+   while(true){
+    if(++passes>15)throw Error('Synchronisierung wiederholt Änderungen ohne Abschluss. Bitte den Entwurf sichern und den Fehler prüfen.');
+    lgQueued=false;
+    const changes=lgChanges();
+    if(!changes.length)break;
+    const {data,error}=await cloudClient.rpc('lg_apply_changes',{p_changes:changes});
+    if(error)throw Error(error.message);
+    for(const r of data||[]){
+     if(r.deleted)delete lgBaseline[r.kind][r.id];
+     else lgBaseline[r.kind][r.id]={version:r.version,data:r.data};
      if(r.kind==='docs'&&r.data){const d=state.docs.find(x=>x.id===r.id);if(d&&d.number!==r.data.number)d.number=r.data.number;}
+    }
+    if(!lgQueued&&!lgChanges().length)break;
    }
-  }while(lgQueued||lgChanges().length);
-  // Never destroy an actively edited offer during an asynchronous save.
-  if(!document.querySelector('#as-facsimile') && !document.querySelector('.as-facsimile-editor'))render();
- }catch(e){lgBlocked=true;alert('Speichern gestoppt: '+e.message+'\n\nEs wurden möglicherweise Änderungen von einer anderen Person vorgenommen. Bitte den Stand prüfen. Diese Seite nicht blind neu laden; gegebenenfalls vorher JSON-Backup exportieren.');}
- finally{lgBusy=false;}
+   // No render during a save: editor state must remain mounted.
+  }catch(e){lgBlocked=true;throw e;}
+  finally{lgBusy=false;lgFlushPromise=null;}
+ })();
+ return lgFlushPromise;
 }
 const lgOldSave=save;
-save=function(){if(!cloudReady||lgBlocked)return;try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}void lgFlush();};
+save=function(){if(!cloudReady||lgBlocked)return;try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}void lgFlush().catch(e=>{console.error("Cloud-Speicherung fehlgeschlagen",e);alert("Supabase-Speicherung fehlgeschlagen: "+e.message+"\nEntwurf bitte nicht neu laden.");});};
 // Prevent bulk import replacing the collaborative database without a dedicated migration.
 importData=function(){alert('Der direkte JSON-Import ist in der Mehrbenutzer-Version gesperrt. Bitte Daten über eine geprüfte Migration importieren.');};
 (async()=>{

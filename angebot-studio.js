@@ -610,42 +610,18 @@ const LGStudio=(()=>{
   try{
    const d=doc(current)?.studioFacsimile?collectFacsimile():collect();
    const expected=studioDocumentContent(d);
-   // Local recovery copy before any asynchronous operation, never overwrites the cloud document.
-   try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:d}));}
-   catch(e){console.warn('Lokale Entwurfssicherung nicht möglich',e)}
-   if(typeof lgFlush!=='function'||typeof cloudClient==='undefined'||!cloudClient)
-     throw Error('Cloud-Synchronisierung nicht verfügbar.');
-   if(typeof cloudReady!=='undefined'&&!cloudReady)throw Error('Supabase ist noch nicht bereit.');
-   if(typeof lgBlocked!=='undefined'&&lgBlocked)throw Error('Supabase-Speicherung ist wegen eines vorherigen Fehlers blockiert.');
-   save();
-   const deadline=Date.now()+25000;
-   let lastError=null,verified=false;
-   while(Date.now()<deadline){
-     if(typeof lgBlocked!=='undefined'&&lgBlocked)throw Error('Supabase-Speicherung blockiert.');
-     if(typeof lgBusy!=='undefined'&&lgBusy){await new Promise(r=>setTimeout(r,250));continue;}
-     await lgFlush();
-     if(typeof lgBusy!=='undefined'&&lgBusy){await new Promise(r=>setTimeout(r,250));continue;}
-     try{await studioVerifyRemote(d,expected);verified=true;break}
-     catch(e){lastError=e;await new Promise(r=>setTimeout(r,450));}
-   }
-   if(!verified){
-     // Explicit document-only write. Never claim success from a flush acknowledgement alone.
-     if(typeof lgBaseline==='undefined'||!lgBaseline.docs)throw lastError||Error('Cloud-Basisstand fehlt.');
-     while(typeof lgBusy!=='undefined'&&lgBusy){
-       if(Date.now()>deadline+10000)throw Error('Cloud-Synchronisierung ist noch beschäftigt.');
-       await new Promise(r=>setTimeout(r,150));
-     }
-     const base=lgBaseline.docs[d.id];
-     const change={kind:'docs',id:d.id,op:base?'update':'insert',version:base?.version||0,data:JSON.parse(JSON.stringify(d))};
-     const {data:result,error:writeError}=await cloudClient.rpc('lg_apply_changes',{p_changes:[change]});
-     if(writeError)throw Error('Supabase-Schreibvorgang fehlgeschlagen: '+writeError.message);
-     const written=(result||[]).find(r=>r.kind==='docs'&&r.id===d.id);
-     if(!written||!written.data)throw Error('Supabase hat keinen bestätigten Dokumentdatensatz zurückgegeben.');
-     lgBaseline.docs[d.id]={version:written.version,data:written.data};
-     await studioVerifyRemote(d,expected);
-   }
+   try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:d}));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
+   if(typeof lgFlush!=='function'||!cloudClient||!cloudReady)throw Error('Supabase nicht bereit.');
+   if(lgBlocked)throw Error('Supabase-Synchronisierung blockiert.');
+   // Do not call save(): it starts an unawaited write. Await the shared write directly.
+   try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+   await lgFlush();
+   // Changes may have arrived while a previous flush was running.
+   if(lgChanges().length)await lgFlush();
+   await studioVerifyRemote(d,expected);
    try{localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
-   dirty=false;alert('Entwurf gespeichert: Aktuelle Textfelder und Tabellen in Supabase geprüft.');
+   dirty=false;
+   alert('Entwurf erfolgreich gespeichert und mit Supabase abgeglichen.');
   }catch(e){dirty=true;alert('Speichern NICHT bestätigt: '+e.message+'\nDie aktuelle Bearbeitung bleibt geöffnet. Bitte nicht neu laden.');}
  }
  async function release(){
