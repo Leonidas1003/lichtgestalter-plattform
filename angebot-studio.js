@@ -614,14 +614,35 @@ const LGStudio=(()=>{
  function studioDocumentContent(d){
   return studioCanonical({studioFacsimilePages:d.studioFacsimilePages||[],studioTemplateTables:d.studioTemplateTables||[],date:d.date||''});
  }
+ function studioMismatchPaths(a,b,prefix=''){
+  if(JSON.stringify(a)===JSON.stringify(b))return [];
+  if(!a||!b||typeof a!=='object'||typeof b!=='object')return [prefix||'Dokument'];
+  const keys=new Set([...Object.keys(a),...Object.keys(b)]),result=[];
+  for(const key of keys){
+   const path=prefix?prefix+'.'+key:key;
+   if(!(key in a)||!(key in b)){result.push(path);continue}
+   result.push(...studioMismatchPaths(a[key],b[key],path));
+   if(result.length>=8)break;
+  }
+  return result.slice(0,8);
+ }
  async function studioVerifyRemote(d,expected){
   if(typeof cloudClient==='undefined'||!cloudClient)throw Error('Supabase-Client nicht verfügbar');
-  const {data,error}=await cloudClient.from('lg_records').select('data,version').eq('kind','docs').eq('id',d.id).single();
-  if(error)throw Error('Supabase-Leseprüfung fehlgeschlagen: '+error.message);
-  if(!data?.data)throw Error('Angebot wurde in Supabase nicht gefunden.');
-  if(JSON.stringify(studioDocumentContent(data.data))!==JSON.stringify(expected))
-    throw Error('Supabase enthält noch eine ältere Angebotsversion. Bitte nicht neu laden.');
-  return data;
+  let lastMismatch=[];
+  for(let attempt=0;attempt<3;attempt++){
+   const {data,error}=await cloudClient.from('lg_records').select('data,version').eq('kind','docs').eq('id',d.id).single();
+   if(error)throw Error('Supabase-Leseprüfung fehlgeschlagen: '+error.message);
+   if(!data?.data)throw Error('Angebot wurde in Supabase nicht gefunden.');
+   const actual=studioDocumentContent(data.data);
+   // Compare normalized content, not JSON object insertion order.
+   if(JSON.stringify(studioCanonical(actual))===JSON.stringify(studioCanonical(expected)))return data;
+   lastMismatch=studioMismatchPaths(expected,actual);
+   if(attempt<2)await new Promise(resolve=>setTimeout(resolve,600));
+  }
+  console.warn('Angebotsstudio: Abweichende Daten nach Supabase-Speicherung',{
+   docId:d.id,fields:lastMismatch
+  });
+  throw Error('Supabase-Rücklesung weicht ab ('+lastMismatch.join(', ')+'). Bitte nicht neu laden. Die aktuelle Bearbeitung bleibt geöffnet.');
  }
  async function saveDraft(){
   try{
