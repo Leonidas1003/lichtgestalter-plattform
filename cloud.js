@@ -23,19 +23,27 @@ async function lgLoad(){
  if(window.LGPlatform?.restore)window.LGPlatform.restore();else render();
 }
 function lgCurrent(){return {customers:Object.fromEntries(state.customers.map(x=>[x.id,x])),projects:Object.fromEntries(state.projects.map(x=>[x.id,x])),docs:Object.fromEntries(state.docs.map(x=>[x.id,x])),settings:{main:state.settings}};}
-function lgChanges(){const now=lgCurrent(),out=[];for(const kind of ['customers','projects','docs','settings']){const old=lgBaseline[kind],fresh=now[kind];for(const id of new Set([...Object.keys(old),...Object.keys(fresh)])){const a=old[id],b=fresh[id];if(a&&!b)out.push({kind,id,op:'delete',version:a.version});else if(!a&&b)out.push({kind,id,op:'insert',version:0,data:b});else if(a&&b&&JSON.stringify(a.data)!==JSON.stringify(b))out.push({kind,id,op:'update',version:a.version,data:b});}}return out;}
+// Canonical comparison: PostgreSQL jsonb reorders object keys. Plain JSON.stringify
+// causes an endless sequence of phantom updates even when the data is identical.
+function lgCanonical(v){
+ if(Array.isArray(v))return v.map(lgCanonical);
+ if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,lgCanonical(v[k])]));
+ return v;
+}
+const lgSame=(a,b)=>JSON.stringify(lgCanonical(a))===JSON.stringify(lgCanonical(b));
+function lgChanges(){const now=lgCurrent(),out=[];for(const kind of ['customers','projects','docs','settings']){const old=lgBaseline[kind],fresh=now[kind];for(const id of new Set([...Object.keys(old),...Object.keys(fresh)])){const a=old[id],b=fresh[id];if(a&&!b)out.push({kind,id,op:'delete',version:a.version});else if(!a&&b)out.push({kind,id,op:'insert',version:0,data:b});else if(a&&b&&!lgSame(a.data,b))out.push({kind,id,op:'update',version:a.version,data:b});}}return out;}
 // One shared flush promise: a caller waits for the actual in-flight write.
 let lgFlushPromise=null;
 async function lgFlush(){
  if(!cloudReady)throw Error('Supabase noch nicht bereit.');
  if(lgBlocked)throw Error('Supabase-Synchronisierung blockiert.');
- if(lgFlushPromise){lgQueued=true;return lgFlushPromise;}
+ if(lgFlushPromise){return lgFlushPromise;}
  lgBusy=true;
  lgFlushPromise=(async()=>{
   try{
    let passes=0;
    while(true){
-    if(++passes>15)throw Error('Synchronisierung wiederholt Änderungen ohne Abschluss. Bitte den Entwurf sichern und den Fehler prüfen.');
+    if(++passes>5)throw Error('Änderungen konnten nach fünf Durchläufen nicht bestätigt werden. Bitte Datenbankzugriff prüfen.');
     lgQueued=false;
     const changes=lgChanges();
     if(!changes.length)break;
@@ -46,7 +54,7 @@ async function lgFlush(){
      else lgBaseline[r.kind][r.id]={version:r.version,data:r.data};
      if(r.kind==='docs'&&r.data){const d=state.docs.find(x=>x.id===r.id);if(d&&d.number!==r.data.number)d.number=r.data.number;}
     }
-    if(!lgQueued&&!lgChanges().length)break;
+    if(!lgChanges().length)break;
    }
    // No render during a save: editor state must remain mounted.
   }catch(e){lgBlocked=true;throw e;}
@@ -55,7 +63,11 @@ async function lgFlush(){
  return lgFlushPromise;
 }
 const lgOldSave=save;
-save=function(){if(!cloudReady||lgBlocked)return;try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}void lgFlush().catch(e=>{console.error("Cloud-Speicherung fehlgeschlagen",e);alert("Supabase-Speicherung fehlgeschlagen: "+e.message+"\nEntwurf bitte nicht neu laden.");});};
+save=function(){
+ try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){console.warn('Lokale Sicherung fehlgeschlagen',e)}
+ if(!cloudReady||lgBlocked)return;
+ void lgFlush().catch(e=>{console.error('Cloud-Speicherung fehlgeschlagen',e);alert('Supabase-Speicherung fehlgeschlagen: '+e.message+'\nEntwurf bitte nicht neu laden.');});
+};
 // Prevent bulk import replacing the collaborative database without a dedicated migration.
 importData=function(){alert('Der direkte JSON-Import ist in der Mehrbenutzer-Version gesperrt. Bitte Daten über eine geprüfte Migration importieren.');};
 (async()=>{
