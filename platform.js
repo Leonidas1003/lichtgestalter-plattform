@@ -4,13 +4,13 @@
 const legacyNav=window.nav, legacyRender=window.render;
 
 const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const tiles=[['Kundendaten verwalten','Kunden, Ansprechpartner und Projekte','Kunden','👥'],['Dokumente erstellen','Angebote, Rechnungen und Auftragsabwicklung','Pipeline','📄'],['Finanzdaten','Liquiditätsplanung, Kredite und Rentabilität','Finanzdaten','📈'],['Controlling','Einnahmen nach Kunden und Ausgaben nach Lieferanten','Controlling','📊'],['Concept Studio','Lichtkonzepte und Präsentationen erstellen','https://leonidas1003.github.io/concept-studio/','💡'],['Angebotsstudio','Individuelle Angebote frei gestalten','Angebotsstudio','✍️']];
+const tiles=[['Kundendaten verwalten','Kunden, Ansprechpartner und Projekte','Kunden','👥'],['Dokumente erstellen','Angebote, Rechnungen und Auftragsabwicklung','Pipeline','📄'],['Finanzdaten','Liquiditätsplanung, Kredite und Rentabilität','Finanzdaten','📈'],['Controlling','Einnahmen nach Kunden und Ausgaben nach Lieferanten','Controlling','📊'],['Concept Studio','Lichtkonzepte und Präsentationen erstellen','https://leonidas1003.github.io/concept-studio/','💡'],['Angebotsstudio','Individuelle Angebote frei gestalten','Angebotsstudio','✍️'],['Clodix AI','Zum Clodix Login','https://www.clodix.ai/de/login','✨'],['JUNO','Zum JUNO Login','https://app.getjuno.com/login','🔗'],['To-dos','Aufgaben, Fälligkeiten und Wiederholungen','To-dos','☑️']];
 function home(){return `<section class="lg-portal"><p class="lg-eyebrow">LICHTGESTALTER PLATTFORM</p><h2>Was möchtest du heute bearbeiten?</h2><p class="lg-sub">Wähle einen Arbeitsbereich. Alle Bereiche nutzen dieselbe Anmeldung und dieselbe Supabase-Datenbank.</p><div class="lg-tiles">${tiles.map(t=>`<button type="button" class="lg-tile" data-go="${t[2]}"><span class="lg-tile-icon">${t[3]}</span><strong>${t[0]}</strong><span>${t[1]}</span><span class="lg-tile-next">Öffnen →</span></button>`).join('')}</div></section>`}
 function finance(){return `<section class="lg-finance"><iframe id="lg-finance-frame" title="Finanzdaten" src="${view==='Controlling'?'controlling.html':'liquiditaet.html'}?v=43" loading="eager"></iframe></section>`}
-function bind(){document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const dest=b.dataset.go;if(dest==='https://leonidas1003.github.io/concept-studio/'){window.open(dest,'_blank','noopener,noreferrer');return;}window.LGPlatform.open(dest);});}
+function bind(){document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const dest=b.dataset.go;if(dest.startsWith('https://')){window.open(dest,'_blank','noopener,noreferrer');return;}window.LGPlatform.open(dest);});}
 const routeKey='lg-platform-view-v21';
 const oldRouteKey='lg-platform-view-v20';
-const allowed=new Set(['Startseite','Kunden','Pipeline','Projekte','Finanzdaten','Controlling','Angebotsstudio','Angebote','Auftragsbestätigungen','Rechnungen','Lieferscheine','Gutschriften','Einstellungen']);
+const allowed=new Set(['Startseite','Kunden','Pipeline','Projekte','Finanzdaten','Controlling','Angebotsstudio','To-dos','Angebote','Auftragsbestätigungen','Rechnungen','Lieferscheine','Gutschriften','Einstellungen']);
 function restoreRoute(){try{const v=sessionStorage.getItem(routeKey)||sessionStorage.getItem(oldRouteKey);return allowed.has(v)?v:'Startseite'}catch{return 'Startseite'}}
 function rememberRoute(dest){try{sessionStorage.setItem(routeKey,dest)}catch{}}
 window.LGPlatform={restore(){view=restoreRoute();render()},open(dest){view=dest;rememberRoute(dest);render()},home(){view='Startseite';rememberRoute(view);render()}};
@@ -36,7 +36,7 @@ window.nav=function(){
  const n=document.getElementById('nav');if(!n)return;
  if(view==='Startseite'){n.innerHTML='';n.style.display='none';return}
  n.style.display='flex';
- if(view==='Finanzdaten'||view==='Controlling'||view==='Angebotsstudio'){n.innerHTML='<button type="button" id="lg-back">← Startseite</button><strong style="padding:10px">'+(view==='Finanzdaten'?'Finanzübersicht':view==='Angebotsstudio'?'Angebotsstudio':'Controlling')+'</strong>';}
+ if(view==='Finanzdaten'||view==='Controlling'||view==='Angebotsstudio'||view==='To-dos'){n.innerHTML='<button type="button" id="lg-back">← Startseite</button><strong style="padding:10px">'+(view==='Finanzdaten'?'Finanzübersicht':view==='Angebotsstudio'?'Angebotsstudio':view==='To-dos'?'To-dos':'Controlling')+'</strong>';}
  else {legacyNav();const back=document.createElement('button');back.type='button';back.id='lg-back';back.textContent='← Startseite';n.prepend(back);}
  document.getElementById('lg-back').onclick=()=>window.LGPlatform.home();
 };
@@ -44,8 +44,8 @@ window.render=function(){
  if(!cloudReady)return;
  if(!['Finanzdaten','Controlling'].includes(view))selectionBar.hidden=true;
  rememberRoute(view);
- if(view==='Startseite'||view==='Finanzdaten'||view==='Controlling'||view==='Angebotsstudio'){
-  nav();document.getElementById('app').innerHTML=view==='Startseite'?home():view==='Angebotsstudio'?LGStudio.page():finance();bind();if(view==='Finanzdaten'||view==='Controlling'){const f=document.getElementById('lg-finance-frame');if(f)f.addEventListener('load',()=>f.contentWindow.postMessage({type:'lg-finance-open'},location.origin),{once:true})}
+ if(view==='Startseite'||view==='Finanzdaten'||view==='Controlling'||view==='Angebotsstudio'||view==='To-dos'){
+  nav();document.getElementById('app').innerHTML=view==='Startseite'?home():view==='Angebotsstudio'?LGStudio.page():view==='To-dos'?'':finance();bind();if(view==='To-dos')LGTodos.page();if(view==='Finanzdaten'||view==='Controlling'){const f=document.getElementById('lg-finance-frame');if(f)f.addEventListener('load',()=>f.contentWindow.postMessage({type:'lg-finance-open'},location.origin),{once:true})}
  }else {legacyRender();nav();rememberRoute(view);}
 };
 // cloud.js calls LGPlatform.restore() after authentication; avoid racing two render calls.
