@@ -71,57 +71,89 @@ const LGStudio=(()=>{
     cell.style.setProperty(kind==='bg'?'background-color':'color',value,'important');
     if(kind==='text')cell.querySelectorAll('span,font,p,div').forEach(n=>n.style.setProperty('color',value,'important'));
   }}dirty=true}
+ // A4 safe text area: 9.6% left, 9% right, 9% top, 10% bottom.
+ function facsimileBounds(page){const w=page.clientWidth,h=page.clientHeight;return {left:w*.096,top:h*.09,right:w*.91,bottom:h*.90}}
+ function facsimileConstrain(el,page){
+  const b=facsimileBounds(page),maxW=b.right-b.left;
+  if(el.offsetWidth>maxW)el.style.width=(maxW/page.clientWidth*100)+'%';
+  const x=Math.min(Math.max(el.offsetLeft,b.left),Math.max(b.left,b.right-el.offsetWidth));
+  const y=Math.max(b.top,el.offsetTop);
+  el.style.left=(x/page.clientWidth*100)+'%';
+  el.style.top=(y/page.clientHeight*100)+'%';
+  return y+Math.max(el.offsetHeight,el.scrollHeight)<=b.bottom;
+ }
  function facsimileLayout(page){
-  if(!page||page.dataset.layoutBusy==='1')return;
-  const elements=[...page.querySelectorAll('[data-block],[data-template-table]')].filter(el=>el.dataset.flow!=='off');
+  if(!page||page.dataset.layoutBusy==='1'||page.dataset.dragging==='1')return;
   page.dataset.layoutBusy='1';
   try{
-   const items=elements.map(el=>({el,anchor:Number(el.dataset.baseTop??el.offsetTop)})).sort((a,b)=>a.anchor-b.anchor);
-   let bottom=0;
-   for(const item of items){
-    const el=item.el;
-    const y=Math.max(item.anchor,bottom?bottom+12:item.anchor);
+   const b=facsimileBounds(page);
+   const items=[...page.querySelectorAll('[data-block],[data-template-table]')];
+   let overflow=false;
+   for(const el of items){if(!facsimileConstrain(el,page))overflow=true}
+   const flowing=items.filter(el=>el.dataset.flow!=='off').sort((a,b)=>Number(a.dataset.baseTop??a.offsetTop)-Number(b.dataset.baseTop??b.offsetTop));
+   let bottom=b.top;
+   for(const el of flowing){
+    const anchor=Math.max(b.top,Number(el.dataset.baseTop??el.offsetTop));
+    const y=Math.max(anchor,bottom===b.top?b.top:bottom+18);
     el.style.top=(y/page.clientHeight*100)+'%';
     bottom=y+Math.max(el.offsetHeight,el.scrollHeight);
+    if(bottom>b.bottom)overflow=true;
    }
-   const safeBottom=page.clientHeight-88;
-   const overflowing=items.filter(({el})=>el.offsetTop+Math.max(el.offsetHeight,el.scrollHeight)>safeBottom);
-   page.classList.toggle('as-page-overflow',overflowing.length>0);
-   page.title=overflowing.length?'Achtung: Inhalt überschreitet den unteren Seitenrand. Bitte auf die nächste Seite verschieben.':'';
+   page.classList.toggle('as-page-overflow',overflow);
+   page.title=overflow?'Inhalt überschreitet den sicheren Seitenrand. Bitte auf eine weitere Seite verteilen.':'';
   }finally{page.dataset.layoutBusy='0'}
  }
  function facsimileInitEditing(){
   const root=document.getElementById('as-facsimile');if(!root)return;
   root.querySelectorAll('[data-block],[data-template-table]').forEach(el=>{
-    el.dataset.baseTop=String(el.offsetTop);el.dataset.baseHeight=String(el.offsetHeight);
-    el.dataset.flow=el.dataset.flow||'on';
-    el.style.resize='both';el.style.minWidth='45px';el.style.minHeight='24px';
-    if(el.matches('[data-block]'))el.style.overflow='auto';
-    const handle=document.createElement('span');handle.className='as-drag-handle as-edit-only';handle.textContent='↕';handle.title='Textfeld oder Tabelle verschieben';handle.contentEditable='false';el.prepend(handle);
-    handle.addEventListener('pointerdown',e=>{
-      if(e.button!==0)return;
-      e.preventDefault();e.stopPropagation();facsimileSelect(el);
-      const page=el.closest('[data-page]');if(!page)return;
-      const rect=page.getBoundingClientRect(),sx=e.clientX,sy=e.clientY,x=el.offsetLeft,y=el.offsetTop;
-      const move=ev=>{
-        const nx=Math.max(rect.width*.09,Math.min(rect.width*.91-el.offsetWidth,x+ev.clientX-sx));
-        const ny=Math.max(rect.height*.09,Math.min(rect.height*.90-el.offsetHeight,y+ev.clientY-sy));
-        el.style.left=(nx/rect.width*100)+'%';el.style.top=(ny/rect.height*100)+'%';el.dataset.baseTop=String(ny);dirty=true;
-      };
-      const stop=()=>{
-        document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',stop);
-        document.removeEventListener('pointercancel',stop);
-        el.dataset.baseTop=String(el.offsetTop);facsimileLayout(page);
-      };
-      document.addEventListener('pointermove',move);document.addEventListener('pointerup',stop);document.addEventListener('pointercancel',stop);
-    });
-    el.addEventListener('pointerdown',e=>{if(e.target.closest('button,.as-drag-handle'))return;facsimileSelect(e.target.closest('td,th')||el,e.ctrlKey||e.metaKey||e.shiftKey)});
-    el.addEventListener('input',()=>{dirty=true;facsimileLayout(el.closest('[data-page]'))});
-    el.addEventListener('pointerup',()=>{dirty=true;el.dataset.baseHeight=String(el.offsetHeight);facsimileLayout(el.closest('[data-page]'))});
-    if(typeof ResizeObserver!=='undefined'){
-      const ro=new ResizeObserver(()=>{if(!el.isConnected)return;const page=el.closest('[data-page]');if(page?.dataset.layoutBusy==='1')return;dirty=true;facsimileLayout(page)});ro.observe(el);
-    }
+   const page=el.closest('[data-page]');
+   el.dataset.baseTop=String(el.offsetTop);
+   el.dataset.flow=el.dataset.flow||'on';
+   el.style.resize='both';el.style.minWidth='45px';el.style.minHeight='24px';
+   // Keep the drag handle INSIDE the box; negative top was clipped by the A4 page.
+   const handle=document.createElement('button');handle.type='button';handle.className='as-drag-handle as-edit-only';
+   handle.textContent='⠿';handle.title='Element ziehen und verschieben';handle.contentEditable='false';
+   el.prepend(handle);
+   handle.addEventListener('pointerdown',e=>{
+    if(e.button!==0)return;
+    e.preventDefault();e.stopPropagation();
+    facsimileSelect(el);
+    const box=page.getBoundingClientRect(),startX=e.clientX,startY=e.clientY;
+    const initialX=el.offsetLeft,initialY=el.offsetTop;
+    const bounds=facsimileBounds(page);
+    page.dataset.dragging='1';
+    const move=ev=>{
+     ev.preventDefault();
+     const dx=(ev.clientX-startX)*page.clientWidth/box.width;
+     const dy=(ev.clientY-startY)*page.clientHeight/box.height;
+     const x=Math.max(bounds.left,Math.min(bounds.right-el.offsetWidth,initialX+dx));
+     const y=Math.max(bounds.top,Math.min(bounds.bottom-el.offsetHeight,initialY+dy));
+     el.style.left=(x/page.clientWidth*100)+'%';el.style.top=(y/page.clientHeight*100)+'%';
+     dirty=true;
+    };
+    const stop=()=>{
+     document.removeEventListener('pointermove',move);
+     document.removeEventListener('pointerup',stop);
+     document.removeEventListener('pointercancel',stop);
+     page.dataset.dragging='0';
+     el.dataset.baseTop=String(el.offsetTop);
+     // Manually placed elements stay where dropped; other flowing blocks reflow.
+     el.dataset.flow='off';
+     facsimileLayout(page);
+    };
+    document.addEventListener('pointermove',move);
+    document.addEventListener('pointerup',stop);
+    document.addEventListener('pointercancel',stop);
+   });
+   el.addEventListener('pointerdown',e=>{if(e.target.closest('button,.as-drag-handle'))return;facsimileSelect(e.target.closest('td,th')||el,e.ctrlKey||e.metaKey||e.shiftKey)});
+   el.addEventListener('input',()=>{dirty=true;facsimileLayout(page)});
+   el.addEventListener('pointerup',()=>{dirty=true;facsimileLayout(page)});
+   if(typeof ResizeObserver!=='undefined'){
+    const ro=new ResizeObserver(()=>{if(!el.isConnected||page.dataset.layoutBusy==='1'||page.dataset.dragging==='1')return;dirty=true;facsimileLayout(page)});
+    ro.observe(el);
+   }
   });
+  root.querySelectorAll('.as-facsimile-page').forEach(facsimileLayout);
  }
  function facsimilePage(){const d=collectFacsimile();d.studioFacsimilePages.push([]);open(d.id);dirty=true}
  function facsimileNewBlock(){const d=collectFacsimile(),n=Number(prompt('Auf welcher Seite (1–'+d.studioFacsimilePages.length+')?','1'));if(!Number.isInteger(n)||n<1||n>d.studioFacsimilePages.length)return;d.studioFacsimilePages[n-1].push({x:57,y:400,w:380,h:35,text:'Neuer Text',size:10,bold:false,flow:true});open(d.id);dirty=true}
@@ -216,7 +248,12 @@ const LGStudio=(()=>{
  #app .as-facsimile-editor{display:grid;grid-template-columns:minmax(0,1fr) 235px;gap:16px;align-items:start}#app .as-facsimile-workspace{min-width:0;overflow:auto}#app .as-facsimile-sidebar{position:sticky;top:12px;max-height:calc(100vh - 30px);overflow:auto;padding:14px;border-radius:12px;background:#24354a;color:white;display:flex;flex-direction:column;gap:9px}#app .as-facsimile-sidebar details{border-top:1px solid #64748b;padding:8px 0}#app .as-facsimile-sidebar summary{font-weight:700;cursor:pointer;margin-bottom:8px}#app .as-facsimile-sidebar button{width:100%;margin:3px 0;padding:7px}#app .as-facsimile-sidebar label{display:block;margin:7px 0;font-size:12px}#app .as-facsimile-sidebar select,#app .as-facsimile-sidebar input{width:100%;margin-top:4px}#app .as-side-help{font-size:11px;opacity:.8}#app .as-template-table thead th{background:#bfc1c4!important;color:#111!important}@media(max-width:1100px){#app .as-facsimile-editor{grid-template-columns:1fr}#app .as-facsimile-sidebar{position:static;max-height:none}}
  #app .as-facsimile-page{overflow:hidden}
  #app .as-drag-handle{font-size:12px!important;letter-spacing:0!important;line-height:1!important;opacity:.65;user-select:none!important;cursor:grab!important;white-space:nowrap!important}#app .as-cell-multi{outline:2px solid #2985df!important;outline-offset:-2px}#app .as-page-overflow{box-shadow:0 0 0 3px #c84b4b,0 2px 12px #0003!important}#app .as-facsimile-block:focus,#app .as-template-table [contenteditable=true]:focus{outline:1px dashed #2673b8}
- </style>`;
+ #app .as-facsimile-page .as-drag-handle{position:absolute!important;left:2px!important;top:2px!important;z-index:100!important;display:block!important;width:23px!important;height:23px!important;padding:0!important;margin:0!important;border:1px solid #8295b0!important;border-radius:4px!important;background:#253c59!important;color:white!important;font-size:17px!important;line-height:20px!important;cursor:grab!important;touch-action:none!important;user-select:none!important;opacity:1!important}
+ #app .as-facsimile-page .as-drag-handle:active{cursor:grabbing!important}
+ #app .as-facsimile-page [data-block]{box-sizing:border-box;overflow-wrap:anywhere}
+ #app .as-facsimile-page [data-template-table]{box-sizing:border-box;max-width:81.4%}
+ #app .as-facsimile-page [data-template-table] table{max-width:100%}
+  </style>`;
  function ensureStudioStyle(){
   const old=document.getElementById('lg-studio-style');
   if(old)old.remove();
