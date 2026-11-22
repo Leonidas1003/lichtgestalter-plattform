@@ -30,20 +30,13 @@ const LGStudio=(()=>{
   return `<div id="as-facsimile">${pages.map((blocks,pi)=>`<div class="as-facsimile-page" data-page="${pi}">
   <img class="as-facsimile-logo" src="${LOGO}" alt="Die Lichtgestalter">
   ${pi===0?`<div class="as-facsimile-sender">Die Lichtgestalter • Ges. für Licht + Raum mbH - Adam-Höfle-Weg 11 - 64673 Zwingenberg</div><div class="as-facsimile-customer">${escape(c.name||'')}<br>${escape(c.address||'').replace(/\n/g,'<br>')}</div><div class="as-facsimile-date">${escape(formatGermanDate(d.date))}</div><div class="as-facsimile-number"><b>Angebot Nr. ${escape(d.number||'Entwurf')}</b></div>`:''}
-  ${blocks.map((b,i)=>{const tableArea=(pi===0&&b.y>=642)||(pi===1&&b.y>=120&&b.y<=715)||(pi===2&&((b.y>=128&&b.y<=432)||(b.y>=535&&b.y<=737)))||(pi===3&&b.y>=195&&b.y<=315);if(tableArea&&!b.userAdded)return '';return `<div class="as-facsimile-block" data-block="${i}" contenteditable="${!ro}" style="left:${b.x/595.2756*100}%;top:${b.y/841.8898*100}%;width:${Math.min(100-b.x/595.2756*100,b.w/595.2756*100+2)}%;height:${(b.h||20)/841.8898*100}%;font-size:${b.size}pt;font-weight:${b.bold?700:400};${b.flow===false?'':''}" data-flow="${b.flow===false?'off':'on'}">${b.html?cleanHtml(b.html):escape(b.text).replace(/\n/g,'<br>')}</div>`}).join('')}
+  ${blocks.map((b,i)=>{const tableArea=(pi===0&&b.y>=642)||(pi===1&&b.y>=120&&b.y<=715)||(pi===2&&((b.y>=128&&b.y<=432)||(b.y>=535&&b.y<=737)))||(pi===3&&b.y>=195&&b.y<=315);if(tableArea)return '';return `<div class="as-facsimile-block" data-block="${i}" contenteditable="${!ro}" style="left:${b.x/595.2756*100}%;top:${b.y/841.8898*100}%;width:${Math.min(100-b.x/595.2756*100,b.w/595.2756*100+2)}%;height:${(b.h||20)/841.8898*100}%;font-size:${b.size}pt;font-weight:${b.bold?700:400};${b.flow===false?'':''}" data-flow="${b.flow===false?'off':'on'}">${b.html?cleanHtml(b.html):escape(b.text).replace(/\n/g,'<br>')}</div>`}).join('')}
   ${pi===0?`<div class="as-facsimile-company">Die Lichtgestalter<br>Gesellschaft für Licht + Raum mbH<br><br>Adam-Höfle-Weg 11<br>64673 Zwingenberg<br>T +49.6251.84808.0<br>F +49.6251.8480818<br><br>contact@dielichtgestalter.de<br><br>Geschäftsführer:<br>Christoph Adlfinger-Pullmann<br><br>Registerblatt HRB 95326<br>Registergericht Darmstadt<br>USt-IdNr. DE305886656</div>`:''}
   ${(d.studioTemplateTables||[]).map((t,i)=>t.page===pi+1?`<div class="as-template-table as-table-${t.kind||'free'}" data-template-table="${i}" data-flow="${t.flow===false?'off':'on'}" style="left:${t.x/595.2756*100}%;top:${t.y/841.8898*100}%;width:${t.w/595.2756*100}%;${t.h?`height:${t.h/841.8898*100}%;`:``}"><div class="as-template-controls as-edit-only">${ro?'':`<button onclick="LGStudio.facsimileTableRow(${i})">+ Zeile</button><button onclick="LGStudio.facsimileTableCol(${i})">+ Spalte</button><button onclick="LGStudio.facsimileTableWidth(${i})">Breiten</button><button onclick="LGStudio.facsimileTableCalc(${i})">Berechnen</button><button onclick="LGStudio.facsimileTableDelete(${i})">Entfernen</button>`}</div><table><colgroup>${(t.widths||t.headers.map(()=>100/t.headers.length)).map(w=>`<col style="width:${Number(w)}%">`).join('')}</colgroup>${t.headers.length?`<thead><tr>${t.headers.map((h,j)=>`<th contenteditable="${!ro}" data-th="${j}" style="background:${escape(t.headerColors?.[j]||'#bcbcbc')}!important;color:${escape(t.headerTextColors?.[j]||'#111111')}!important;">${escape(h)}</th>`).join('')}</tr></thead>`:''}<tbody>${t.rows.map((r,ri)=>`<tr>${r.map((v,j)=>`<td contenteditable="${!ro}" data-tr="${ri}" data-td="${j}" style="background:${escape(t.cellColors?.[ri+','+j]||'#ffffff')}!important;color:${escape(t.cellTextColors?.[ri+','+j]||'#111111')}!important;">${escape(v).replace(/\n/g,'<br>')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'').join('')}
   <div class="as-facsimile-footer">Seite ${pi+1} von ${pages.length}</div></div>`).join('')}</div>`;
  }
  function collectFacsimile(){const d=doc(current);if(!d||locked(d))throw Error('Dokument gesperrt');
-  const renderedPages=[...document.querySelectorAll('#as-facsimile .as-facsimile-page')];
-  if(!renderedPages.length)throw Error('Editor-Seiten fehlen. Speicherung abgebrochen, damit keine Textfelder verloren gehen.');
-  if(d.studioFacsimilePages?.length&&renderedPages.length!==d.studioFacsimilePages.length)
-    throw Error('Nicht alle Seiten sind geladen. Speicherung zum Schutz der Textfelder abgebrochen.');
-  d.studioFacsimilePages=[...document.querySelectorAll('.as-facsimile-page')].map((page,pi)=>{const original=[...((d.studioFacsimilePages||facsimilePages)[pi]||[])];const visibleIndices=new Set([...page.querySelectorAll('[data-block]')].map(el=>Number(el.dataset.block)));
-   for(let i=0;i<original.length;i++)if(original[i]?.userAdded&&!visibleIndices.has(i))
-     throw Error('Textfeld '+(i+1)+' auf Seite '+(pi+1)+' fehlt im Editor. Speichern zum Schutz der Daten abgebrochen.');
-   page.querySelectorAll('[data-block]').forEach(el=>{const i=Number(el.dataset.block);if(original[i])original[i]={...original[i],text:[...el.childNodes].filter(n=>!n.classList?.contains('as-drag-handle')&&!n.classList?.contains('as-resize-grip')).map(n=>n.textContent||'').join(''),html:[...el.childNodes].filter(n=>!n.classList?.contains('as-drag-handle')&&!n.classList?.contains('as-resize-grip')).map(n=>n.nodeType===1?n.outerHTML:n.textContent).join(''),x:parseFloat(el.style.left)*595.2756/100,y:parseFloat(el.style.top)*841.8898/100,w:parseFloat(el.style.width)*595.2756/100,h:parseFloat(el.style.height)*841.8898/100,flow:el.dataset.flow!=='off'}});return original});
+  d.studioFacsimilePages=[...document.querySelectorAll('.as-facsimile-page')].map((page,pi)=>{const original=[...((d.studioFacsimilePages||facsimilePages)[pi]||[])];page.querySelectorAll('[data-block]').forEach(el=>{const i=Number(el.dataset.block);if(original[i])original[i]={...original[i],text:[...el.childNodes].filter(n=>!n.classList?.contains('as-drag-handle')&&!n.classList?.contains('as-resize-grip')).map(n=>n.textContent||'').join(''),html:[...el.childNodes].filter(n=>!n.classList?.contains('as-drag-handle')&&!n.classList?.contains('as-resize-grip')).map(n=>n.nodeType===1?n.outerHTML:n.textContent).join(''),x:parseFloat(el.style.left)*595.2756/100,y:parseFloat(el.style.top)*841.8898/100,w:parseFloat(el.style.width)*595.2756/100,h:parseFloat(el.style.height)*841.8898/100,flow:el.dataset.flow!=='off'}});return original});
   d.studioTemplateTables=(d.studioTemplateTables||[]).map((t,i)=>{const el=document.querySelector(`[data-template-table="${i}"]`);if(!el)return t;return {...t,headers:[...el.querySelectorAll('[data-th]')].map(e=>e.innerText),rows:[...el.querySelectorAll('tbody tr')].map(tr=>[...tr.querySelectorAll('td')].map(td=>td.innerText)),x:parseFloat(el.style.left)*595.2756/100,y:parseFloat(el.style.top)*841.8898/100,w:parseFloat(el.style.width)*595.2756/100,h:el.style.height?parseFloat(el.style.height)*841.8898/100:undefined,flow:el.dataset.flow!=='off',headerColors:[...el.querySelectorAll('thead th')].map(e=>e.style.backgroundColor||'#bcbcbc'),headerTextColors:[...el.querySelectorAll('thead th')].map(e=>e.style.color||'#111111'),cellColors:Object.fromEntries([...el.querySelectorAll('tbody td')].map(e=>[e.dataset.tr+','+e.dataset.td,e.style.backgroundColor||'#ffffff'])),cellTextColors:Object.fromEntries([...el.querySelectorAll('tbody td')].map(e=>[e.dataset.tr+','+e.dataset.td,e.style.color||'#111111']))}});d.date=document.getElementById('as-date')?.value||d.date;return d;
  }
  function facsimileTableAdd(){facsimileCheckpoint();const d=collectFacsimile();const n=Number(prompt('Tabelle auf Seite (1–'+d.studioFacsimilePages.length+')','4'));if(!Number.isInteger(n)||n<1||n>d.studioFacsimilePages.length)return;d.studioTemplateTables=d.studioTemplateTables||[];d.studioTemplateTables.push({page:n,x:57,y:400,w:416,kind:'free',widths:[50,50],headers:['Spalte 1','Spalte 2'],rows:[['','']]});open(d.id);dirty=true}
@@ -249,7 +242,7 @@ const LGStudio=(()=>{
   root.querySelectorAll('.as-facsimile-page').forEach(facsimileLayout);
  }
  function facsimilePage(){facsimileCheckpoint();const d=collectFacsimile();d.studioFacsimilePages.push([]);open(d.id);dirty=true}
- function facsimileNewBlock(){facsimileCheckpoint();const d=collectFacsimile(),n=Number(prompt('Auf welcher Seite (1–'+d.studioFacsimilePages.length+')?','1'));if(!Number.isInteger(n)||n<1||n>d.studioFacsimilePages.length)return;d.studioFacsimilePages[n-1].push({x:57,y:400,w:380,h:35,text:'Neuer Text',size:10,bold:false,flow:true,userAdded:true});open(d.id);dirty=true}
+ function facsimileNewBlock(){facsimileCheckpoint();const d=collectFacsimile(),n=Number(prompt('Auf welcher Seite (1–'+d.studioFacsimilePages.length+')?','1'));if(!Number.isInteger(n)||n<1||n>d.studioFacsimilePages.length)return;d.studioFacsimilePages[n-1].push({x:57,y:400,w:380,h:35,text:'Neuer Text',size:10,bold:false,flow:true});open(d.id);dirty=true}
 
  function facsimilePageDelete(){facsimileCheckpoint();const d=collectFacsimile();if(d.studioFacsimilePages.length<=1)return alert('Mindestens eine Seite muss bleiben.');const n=Number(prompt('Welche Seite löschen? (1–'+d.studioFacsimilePages.length+')',String(d.studioFacsimilePages.length)));if(!Number.isInteger(n)||n<1||n>d.studioFacsimilePages.length)return;if(!confirm('Seite '+n+' samt Text und Tabellen wirklich löschen?'))return;d.studioFacsimilePages.splice(n-1,1);d.studioTemplateTables=(d.studioTemplateTables||[]).filter(t=>t.page!==n).map(t=>({...t,page:t.page>n?t.page-1:t.page}));open(d.id);dirty=true}
  function facsimileFontFamily(v){document.execCommand('fontName',false,v);dirty=true}
@@ -596,14 +589,49 @@ const LGStudio=(()=>{
   Object.assign(d,{studioCalcHeadings:heads,studioFreeTables:free,studioCalcGroups:groups,studioTop:cleanHtml(document.getElementById('as-top').innerHTML),studioBottom:cleanHtml(document.getElementById('as-bottom').innerHTML),date:document.getElementById('as-date').value,vat:Number(document.getElementById('as-vat').value),lines});
   return d;
  }
+ function studioCanonical(v){
+  if(Array.isArray(v))return v.map(studioCanonical);
+  if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,studioCanonical(v[k])]));
+  return v;
+ }
+ function studioDocumentContent(d){
+  return studioCanonical({studioFacsimilePages:d.studioFacsimilePages||[],studioTemplateTables:d.studioTemplateTables||[],date:d.date||''});
+ }
+ async function studioVerifyRemote(d,expected){
+  if(typeof cloudClient==='undefined'||!cloudClient)throw Error('Supabase-Client nicht verfügbar');
+  const {data,error}=await cloudClient.from('lg_records').select('data,version').eq('kind','docs').eq('id',d.id).single();
+  if(error)throw Error('Supabase-Leseprüfung fehlgeschlagen: '+error.message);
+  if(!data?.data)throw Error('Angebot wurde in Supabase nicht gefunden.');
+  if(JSON.stringify(studioDocumentContent(data.data))!==JSON.stringify(expected))
+    throw Error('Supabase enthält noch eine ältere Angebotsversion. Bitte nicht neu laden.');
+  return data;
+ }
  async function saveDraft(){
   try{
    const d=doc(current)?.studioFacsimile?collectFacsimile():collect();
-   save(); // immediately commit draft to the existing platform state
-   if(typeof lgFlush!=='function'||typeof lgWaitForSavedDoc!=='function')throw Error('Cloud-Synchronisierung ist nicht verfügbar. Entwurf bleibt im aktuellen Browserzustand.');
-   await Promise.race([ (async()=>{await lgFlush();await lgWaitForSavedDoc(d.id)})(), new Promise((_,reject)=>setTimeout(()=>reject(new Error('Supabase-Speicherung nach 20 Sekunden nicht bestätigt.')),20000))]);
-   dirty=false;alert('Entwurf gespeichert und mit Supabase synchronisiert.');open(d.id);
-  }catch(e){dirty=true;alert('Speichern nicht bestätigt: '+e.message+'\nBitte diese Seite nicht schließen, bevor die Speicherung erfolgreich ist.');}
+   const expected=studioDocumentContent(d);
+   // Local recovery copy before any asynchronous operation, never overwrites the cloud document.
+   try{localStorage.setItem('lg_offer_unsynced_'+d.id,JSON.stringify({savedAt:new Date().toISOString(),document:d}));}
+   catch(e){console.warn('Lokale Entwurfssicherung nicht möglich',e)}
+   if(typeof lgFlush!=='function'||typeof cloudClient==='undefined'||!cloudClient)
+     throw Error('Cloud-Synchronisierung nicht verfügbar.');
+   if(typeof cloudReady!=='undefined'&&!cloudReady)throw Error('Supabase ist noch nicht bereit.');
+   if(typeof lgBlocked!=='undefined'&&lgBlocked)throw Error('Supabase-Speicherung ist wegen eines vorherigen Fehlers blockiert.');
+   save();
+   const deadline=Date.now()+25000;
+   let lastError=null,verified=false;
+   while(Date.now()<deadline){
+     if(typeof lgBlocked!=='undefined'&&lgBlocked)throw Error('Supabase-Speicherung blockiert.');
+     if(typeof lgBusy!=='undefined'&&lgBusy){await new Promise(r=>setTimeout(r,250));continue;}
+     await lgFlush();
+     if(typeof lgBusy!=='undefined'&&lgBusy){await new Promise(r=>setTimeout(r,250));continue;}
+     try{await studioVerifyRemote(d,expected);verified=true;break}
+     catch(e){lastError=e;await new Promise(r=>setTimeout(r,450));}
+   }
+   if(!verified)throw lastError||Error('Supabase hat die aktuelle Version nicht bestätigt.');
+   try{localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
+   dirty=false;alert('Entwurf gespeichert: Aktuelle Textfelder und Tabellen in Supabase geprüft.');open(d.id);
+  }catch(e){dirty=true;alert('Speichern NICHT bestätigt: '+e.message+'\nDie aktuelle Bearbeitung bleibt geöffnet. Bitte nicht neu laden.');}
  }
  async function release(){
   try{const d=doc(current)?.studioFacsimile?collectFacsimile():collect();if(!confirm('Angebot verbindlich freigeben? Danach ist es schreibgeschützt.'))return;
