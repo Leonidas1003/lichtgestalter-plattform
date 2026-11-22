@@ -628,9 +628,24 @@ const LGStudio=(()=>{
      try{await studioVerifyRemote(d,expected);verified=true;break}
      catch(e){lastError=e;await new Promise(r=>setTimeout(r,450));}
    }
-   if(!verified)throw lastError||Error('Supabase hat die aktuelle Version nicht bestätigt.');
+   if(!verified){
+     // Explicit document-only write. Never claim success from a flush acknowledgement alone.
+     if(typeof lgBaseline==='undefined'||!lgBaseline.docs)throw lastError||Error('Cloud-Basisstand fehlt.');
+     while(typeof lgBusy!=='undefined'&&lgBusy){
+       if(Date.now()>deadline+10000)throw Error('Cloud-Synchronisierung ist noch beschäftigt.');
+       await new Promise(r=>setTimeout(r,150));
+     }
+     const base=lgBaseline.docs[d.id];
+     const change={kind:'docs',id:d.id,op:base?'update':'insert',version:base?.version||0,data:JSON.parse(JSON.stringify(d))};
+     const {data:result,error:writeError}=await cloudClient.rpc('lg_apply_changes',{p_changes:[change]});
+     if(writeError)throw Error('Supabase-Schreibvorgang fehlgeschlagen: '+writeError.message);
+     const written=(result||[]).find(r=>r.kind==='docs'&&r.id===d.id);
+     if(!written||!written.data)throw Error('Supabase hat keinen bestätigten Dokumentdatensatz zurückgegeben.');
+     lgBaseline.docs[d.id]={version:written.version,data:written.data};
+     await studioVerifyRemote(d,expected);
+   }
    try{localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
-   dirty=false;alert('Entwurf gespeichert: Aktuelle Textfelder und Tabellen in Supabase geprüft.');open(d.id);
+   dirty=false;alert('Entwurf gespeichert: Aktuelle Textfelder und Tabellen in Supabase geprüft.');
   }catch(e){dirty=true;alert('Speichern NICHT bestätigt: '+e.message+'\nDie aktuelle Bearbeitung bleibt geöffnet. Bitte nicht neu laden.');}
  }
  async function release(){

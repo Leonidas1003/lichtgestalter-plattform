@@ -37,7 +37,8 @@ async function lgFlush(){
      if(r.kind==='docs'&&r.data){const d=state.docs.find(x=>x.id===r.id);if(d&&d.number!==r.data.number)d.number=r.data.number;}
    }
   }while(lgQueued||lgChanges().length);
-  render();
+  // Never destroy an actively edited offer during an asynchronous save.
+  if(!document.querySelector('#as-facsimile') && !document.querySelector('.as-facsimile-editor'))render();
  }catch(e){lgBlocked=true;alert('Speichern gestoppt: '+e.message+'\n\nEs wurden möglicherweise Änderungen von einer anderen Person vorgenommen. Bitte den Stand prüfen. Diese Seite nicht blind neu laden; gegebenenfalls vorher JSON-Backup exportieren.');}
  finally{lgBusy=false;}
 }
