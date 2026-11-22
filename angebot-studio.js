@@ -655,6 +655,16 @@ const LGStudio=(()=>{
  function studioDocumentContent(d){
   return studioCanonical({studioFacsimilePages:d.studioFacsimilePages||[],studioTemplateTables:d.studioTemplateTables||[],date:d.date||''});
  }
+ function studioWithoutTransientFlags(v){
+  if(Array.isArray(v))return v.map(studioWithoutTransientFlags);
+  if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).filter(([k])=>k!=='edited').map(([k,val])=>[k,studioWithoutTransientFlags(val)]));
+  return v;
+ }
+ function studioContentWithoutGeometry(v){
+  if(Array.isArray(v))return v.map(studioContentWithoutGeometry);
+  if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).filter(([k])=>!['edited','x','y','w','h','flow'].includes(k)).map(([k,val])=>[k,studioContentWithoutGeometry(val)]));
+  return v;
+ }
  function studioMismatchPaths(a,b,prefix=''){
   if(JSON.stringify(a)===JSON.stringify(b))return [];
   if(!a||!b||typeof a!=='object'||typeof b!=='object')return [prefix||'Dokument'];
@@ -676,8 +686,16 @@ const LGStudio=(()=>{
    if(!data?.data)throw Error('Angebot wurde in Supabase nicht gefunden.');
    const actual=studioDocumentContent(data.data);
    // Compare normalized content, not JSON object insertion order.
-   if(JSON.stringify(studioCanonical(actual))===JSON.stringify(studioCanonical(expected)))return data;
-   lastMismatch=studioMismatchPaths(expected,actual);
+   // `edited` is only a UI marker; it is not user-authored content.
+   const a=studioCanonical(studioWithoutTransientFlags(actual));
+   const b=studioCanonical(studioWithoutTransientFlags(expected));
+   if(JSON.stringify(a)===JSON.stringify(b))return {data,verified:'full'};
+   const aContent=studioCanonical(studioContentWithoutGeometry(actual));
+   const bContent=studioCanonical(studioContentWithoutGeometry(expected));
+   if(JSON.stringify(aContent)===JSON.stringify(bContent)){
+     lastMismatch=studioMismatchPaths(b,a);
+     if(attempt===2)return {data,verified:'content-only',differences:lastMismatch};
+   }else lastMismatch=studioMismatchPaths(b,a);
    if(attempt<2)await new Promise(resolve=>setTimeout(resolve,600));
   }
   console.warn('Angebotsstudio: Abweichende Daten nach Supabase-Speicherung',{
@@ -697,7 +715,12 @@ const LGStudio=(()=>{
    await lgFlush();
    // In-flight write has completed; commit any edits made during that write.
    if(lgChanges().length)await lgFlush();
-   await studioVerifyRemote(d,expected);
+   const verification=await studioVerifyRemote(d,expected);
+   if(verification.verified==='content-only'){
+     dirty=true;
+     alert('Angebotstexte und Tabelleninhalte sind in Supabase bestätigt. Die Layoutpositionen bzw. Größen weichen jedoch ab ('+verification.differences.join(', ')+').\nDie lokale Sicherheitskopie bleibt erhalten. Bitte vor dem Neuladen prüfen.');
+     return;
+   }
    try{localStorage.removeItem('lg_offer_unsynced_'+d.id)}catch(e){}
    dirty=false;
    alert('Entwurf erfolgreich gespeichert und mit Supabase abgeglichen.');
