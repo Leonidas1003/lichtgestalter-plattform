@@ -70,7 +70,7 @@
             const cols = [...table.querySelectorAll('colgroup col')];
             if (cols[2] && cols[idx]) cols[2].style.width = (parseFloat(cols[2].style.width) + parseFloat(cols[idx].style.width)) + '%';
             cols[idx]?.remove();
-            for (const row of table.rows) if (row.cells[idx]) row.deleteCell(idx);
+            for (const row of table.rows) { if(row.classList.contains("lg-group-heading")||row.classList.contains("lg-group-subtotal")){row.cells[0].colSpan--; } else if (row.cells[idx]) row.deleteCell(idx); }
           }
         }
       }
