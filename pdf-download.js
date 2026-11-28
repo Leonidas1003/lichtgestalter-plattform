@@ -61,6 +61,19 @@
         if (!el.textContent.trim()) el.remove();
       }
 
+      // V95: Rabattspalte nur bei tatsächlichem Positionsrabatt (Angebote).
+      if (d.type === 'Q' && !(d.lines || []).some(l => Number(l.discount || 0) !== 0)) {
+        const table = clone.querySelector('.document-table');
+        if (table) {
+          const idx = [...table.querySelectorAll('thead th')].findIndex(th => th.textContent.trim() === 'Rabatt');
+          if (idx >= 0) {
+            const cols = [...table.querySelectorAll('colgroup col')];
+            if (cols[2] && cols[idx]) cols[2].style.width = (parseFloat(cols[2].style.width) + parseFloat(cols[idx].style.width)) + '%';
+            cols[idx]?.remove();
+            for (const row of table.rows) if (row.cells[idx]) row.deleteCell(idx);
+          }
+        }
+      }
       const host = document.createElement('div');
       host.style.cssText = 'position:fixed;left:-12000px;top:0;width:794px;background:white;z-index:-1';
       clone.style.cssText = 'position:relative;width:210mm;min-height:282mm;box-sizing:border-box;padding:34mm 55mm 23mm 19mm;font:9.2pt/1.28 Arial,Helvetica,sans-serif;color:#111;background:#fff';
@@ -89,6 +102,72 @@
       try {
         const img = clone.querySelector('.doc-logo');
         if (img && !img.complete) await new Promise(resolve => {img.onload=resolve;img.onerror=resolve;});
+        if (['Q','C','I','G','D'].includes(d.type)) {
+          // Build physical A4 pages before rasterization, rather than slicing one long canvas.
+          const logo = clone.querySelector('.doc-logo');
+          const company = clone.querySelector('.company-side');
+          const content = [...clone.children].filter(el => !el.matches('.doc-logo,.company-side,.page-number'));
+          const pages = [];
+          let page, body;
+          function newPage() {
+            page = document.createElement('div');
+            page.className = 'paper lg-paged-offer';
+            page.style.cssText = 'position:relative;width:210mm;height:297mm;min-height:0;box-sizing:border-box;padding:34mm 55mm 23mm 19mm;font:9.2pt/1.28 Arial,Helvetica,sans-serif;color:#111;background:white;overflow:hidden;margin:0;box-shadow:none';
+            if (logo) page.append(logo.cloneNode(true));
+            body = document.createElement('div');
+            body.style.cssText = 'height:240mm;display:flow-root;box-sizing:border-box;';
+            page.append(body);
+            if (company) {const footer=company.cloneNode(true);footer.style.setProperty('position','absolute','important');page.append(footer);}
+            const number = document.createElement('div'); number.className='page-number'; number.textContent='Seite '+(pages.length+1); number.style.transform='translateX(-50%)'; page.append(number);
+            host.append(page); pages.push(page);
+          }
+          function fits() { return body.scrollHeight <= body.clientHeight + 1; }
+          function place(el) {
+            body.append(el);
+            if (fits()) return;
+            el.remove();
+            if (body.children.length) newPage();
+            body.append(el);
+            if (!fits()) throw Error('Ein Dokumentblock ist höher als eine A4-Seite. Bitte kürzen oder aufteilen.');
+          }
+          function notes(el) {
+            // Split at explicit line and paragraph boundaries, retaining inline markup.
+            const pieces=[]; let part=el.cloneNode(false);
+            for (const node of [...el.childNodes]) {
+              if (node.nodeName==='BR') { pieces.push(part); part=el.cloneNode(false); }
+              else if (node.nodeName==='P') { if(part.childNodes.length) pieces.push(part); const p=el.cloneNode(false); p.append(node.cloneNode(true)); pieces.push(p); part=el.cloneNode(false); }
+              else part.append(node.cloneNode(true));
+            }
+            if(part.childNodes.length) pieces.push(part);
+            let group=el.cloneNode(false); body.append(group);
+            for(const piece of pieces) {
+              const line=document.createElement('div'); line.style.minHeight='1.5em'; line.append(...piece.childNodes); group.append(line);
+              if(!fits()) { line.remove(); if(!group.childNodes.length) group.remove(); newPage(); group=el.cloneNode(false); group.style.marginTop='0'; body.append(group); group.append(line); if(!fits()) throw Error('Ein Textabsatz ist höher als eine A4-Seite.'); }
+            }
+          }
+          newPage();
+          for (const el of content) {
+            if (el.matches('.document-table')) {
+              let table;
+              function startTable() { table=el.cloneNode(false); for(const child of el.children) if(child.tagName!=='TBODY') table.append(child.cloneNode(true)); table.append(document.createElement('tbody')); body.append(table); }
+              startTable();
+              for(const row of el.querySelectorAll('tbody tr')) {
+                const copy=row.cloneNode(true); table.tBodies[0].append(copy);
+                if(!fits()) { copy.remove(); if(!table.tBodies[0].rows.length) table.remove(); newPage(); startTable(); table.tBodies[0].append(copy); if(!fits()) throw Error('Eine Dokumentposition ist höher als eine A4-Seite. Bitte auf mehrere Positionen verteilen.'); }
+              }
+            } else if(el.matches('.document-notes')) notes(el);
+            else if(el.matches('.totals') && el.scrollHeight > body.clientHeight) {for(const child of el.children){const part=el.cloneNode(false);part.style.marginTop='2mm';part.append(child.cloneNode(true));place(part);}} else place(el.cloneNode(true));
+          }
+          clone.remove();
+          let pdf;
+          for(const sheet of pages) {
+            const worker=html2pdf().set({margin:0,image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:[]}}).from(sheet).toCanvas();
+            const canvas=await worker.get('canvas');
+            if(!pdf) { pdf=await worker.toPdf().get('pdf'); while(pdf.getNumberOfPages()>1) pdf.deletePage(pdf.getNumberOfPages()); }
+            else { pdf.addPage('a4','portrait'); pdf.addImage(canvas.toDataURL('image/jpeg',0.98),'JPEG',0,0,210,297); }
+          }
+          return pdf.output('blob');
+        }
         const pdfBlob = await html2pdf().set({
           margin:0,
           filename:(d.number || 'Dokument').replace(/[^a-zA-Z0-9_.-]/g,'_')+'.pdf',
